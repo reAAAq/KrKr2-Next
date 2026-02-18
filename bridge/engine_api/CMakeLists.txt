@@ -13,6 +13,11 @@ target_include_directories(engine_api
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+if(TARGET krkr2core AND TARGET krkr2plugin)
+    target_compile_definitions(engine_api PRIVATE ENGINE_API_USE_KRKR2_RUNTIME)
+    target_link_libraries(engine_api PRIVATE krkr2core krkr2plugin)
+endif()
+
 set_target_properties(engine_api PROPERTIES
     OUTPUT_NAME "engine_api"
 )
