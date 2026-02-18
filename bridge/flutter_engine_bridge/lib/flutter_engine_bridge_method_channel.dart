@@ -16,4 +16,37 @@ class MethodChannelFlutterEngineBridge extends FlutterEngineBridgePlatform {
     );
     return version;
   }
+
+  @override
+  Future<int?> createTexture({required int width, required int height}) async {
+    return methodChannel.invokeMethod<int>('createTexture', <String, Object>{
+      'width': width,
+      'height': height,
+    });
+  }
+
+  @override
+  Future<void> updateTextureRgba({
+    required int textureId,
+    required Uint8List rgba,
+    required int width,
+    required int height,
+    required int rowBytes,
+  }) async {
+    await methodChannel
+        .invokeMethod<void>('updateTextureRgba', <String, Object>{
+          'textureId': textureId,
+          'rgba': rgba,
+          'width': width,
+          'height': height,
+          'rowBytes': rowBytes,
+        });
+  }
+
+  @override
+  Future<void> disposeTexture({required int textureId}) async {
+    await methodChannel.invokeMethod<void>('disposeTexture', <String, Object>{
+      'textureId': textureId,
+    });
+  }
 }

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'flutter_engine_bridge_method_channel.dart';
@@ -8,7 +10,8 @@ abstract class FlutterEngineBridgePlatform extends PlatformInterface {
 
   static final Object _token = Object();
 
-  static FlutterEngineBridgePlatform _instance = MethodChannelFlutterEngineBridge();
+  static FlutterEngineBridgePlatform _instance =
+      MethodChannelFlutterEngineBridge();
 
   /// The default instance of [FlutterEngineBridgePlatform] to use.
   ///
@@ -25,5 +28,23 @@ abstract class FlutterEngineBridgePlatform extends PlatformInterface {
 
   Future<String?> getPlatformVersion() {
     throw UnimplementedError('platformVersion() has not been implemented.');
+  }
+
+  Future<int?> createTexture({required int width, required int height}) {
+    throw UnimplementedError('createTexture() has not been implemented.');
+  }
+
+  Future<void> updateTextureRgba({
+    required int textureId,
+    required Uint8List rgba,
+    required int width,
+    required int height,
+    required int rowBytes,
+  }) {
+    throw UnimplementedError('updateTextureRgba() has not been implemented.');
+  }
+
+  Future<void> disposeTexture({required int textureId}) {
+    throw UnimplementedError('disposeTexture() has not been implemented.');
   }
 }

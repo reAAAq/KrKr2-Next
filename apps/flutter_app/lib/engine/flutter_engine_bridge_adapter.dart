@@ -125,6 +125,33 @@ class FlutterEngineBridgeAdapter implements EngineBridge {
   }
 
   @override
+  Future<int?> createTexture({required int width, required int height}) {
+    return _delegate.createTexture(width: width, height: height);
+  }
+
+  @override
+  Future<bool> updateTextureRgba({
+    required int textureId,
+    required Uint8List rgba,
+    required int width,
+    required int height,
+    required int rowBytes,
+  }) {
+    return _delegate.updateTextureRgba(
+      textureId: textureId,
+      rgba: rgba,
+      width: width,
+      height: height,
+      rowBytes: rowBytes,
+    );
+  }
+
+  @override
+  Future<void> disposeTexture({required int textureId}) {
+    return _delegate.disposeTexture(textureId: textureId);
+  }
+
+  @override
   Future<int> engineRuntimeApiVersion() => _delegate.engineRuntimeApiVersion();
 
   @override

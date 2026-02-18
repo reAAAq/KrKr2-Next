@@ -16,6 +16,9 @@ class _FakeEngineBridge implements EngineBridge {
   int setOptionCalls = 0;
   int setSurfaceSizeCalls = 0;
   int sendInputCalls = 0;
+  int createTextureCalls = 0;
+  int updateTextureCalls = 0;
+  int disposeTextureCalls = 0;
 
   @override
   bool get isFfiAvailable => true;
@@ -123,6 +126,29 @@ class _FakeEngineBridge implements EngineBridge {
   }
 
   @override
+  Future<int?> createTexture({required int width, required int height}) async {
+    createTextureCalls += 1;
+    return null;
+  }
+
+  @override
+  Future<bool> updateTextureRgba({
+    required int textureId,
+    required Uint8List rgba,
+    required int width,
+    required int height,
+    required int rowBytes,
+  }) async {
+    updateTextureCalls += 1;
+    return true;
+  }
+
+  @override
+  Future<void> disposeTexture({required int textureId}) async {
+    disposeTextureCalls += 1;
+  }
+
+  @override
   Future<int> engineTick({int deltaMs = 16}) async {
     tickCalls += 1;
     return 0;
@@ -192,7 +218,7 @@ void main() {
     );
     await tester.ensureVisible(smokeButton);
     await tester.tap(smokeButton);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 200));
 
     expect(fakeBridge.createCalls, 1);
     expect(fakeBridge.openGameCalls, 1);

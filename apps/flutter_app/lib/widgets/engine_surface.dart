@@ -23,6 +23,7 @@ class EngineSurface extends StatefulWidget {
     super.key,
     required this.bridge,
     required this.active,
+    this.preferTexture = true,
     this.pollInterval = const Duration(milliseconds: 33),
     this.onLog,
     this.onError,
@@ -30,6 +31,7 @@ class EngineSurface extends StatefulWidget {
 
   final EngineBridge bridge;
   final bool active;
+  final bool preferTexture;
   final Duration pollInterval;
   final ValueChanged<String>? onLog;
   final ValueChanged<String>? onError;
@@ -42,10 +44,12 @@ class _EngineSurfaceState extends State<EngineSurface> {
   final FocusNode _focusNode = FocusNode(debugLabel: 'engine-surface-focus');
   Timer? _frameTimer;
   bool _frameInFlight = false;
+  bool _textureInitInFlight = false;
   ui.Image? _frameImage;
   int _lastFrameSerial = -1;
   int _surfaceWidth = 0;
   int _surfaceHeight = 0;
+  int? _textureId;
 
   @override
   void initState() {
@@ -56,8 +60,15 @@ class _EngineSurfaceState extends State<EngineSurface> {
   @override
   void didUpdateWidget(covariant EngineSurface oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.bridge != widget.bridge) {
+      unawaited(_disposeTexture());
+    }
+    if (!widget.preferTexture && oldWidget.preferTexture) {
+      unawaited(_disposeTexture());
+    }
     if (oldWidget.active != widget.active ||
-        oldWidget.bridge != widget.bridge) {
+        oldWidget.bridge != widget.bridge ||
+        oldWidget.preferTexture != widget.preferTexture) {
       _reconcilePolling();
     }
   }
@@ -66,6 +77,7 @@ class _EngineSurfaceState extends State<EngineSurface> {
   void dispose() {
     _frameTimer?.cancel();
     _frameImage?.dispose();
+    unawaited(_disposeTexture());
     _focusNode.dispose();
     super.dispose();
   }
@@ -90,6 +102,7 @@ class _EngineSurfaceState extends State<EngineSurface> {
     final int width = size.width.round().clamp(1, 16384);
     final int height = size.height.round().clamp(1, 16384);
     if (width == _surfaceWidth && height == _surfaceHeight) {
+      await _ensureTexture();
       return;
     }
 
@@ -106,6 +119,54 @@ class _EngineSurfaceState extends State<EngineSurface> {
       return;
     }
     widget.onLog?.call('surface resized: ${width}x$height');
+    await _ensureTexture();
+  }
+
+  Future<void> _ensureTexture() async {
+    if (!widget.active ||
+        !widget.preferTexture ||
+        _textureInitInFlight ||
+        _textureId != null) {
+      return;
+    }
+
+    _textureInitInFlight = true;
+    try {
+      final int? textureId = await widget.bridge.createTexture(
+        width: _surfaceWidth > 0 ? _surfaceWidth : 1,
+        height: _surfaceHeight > 0 ? _surfaceHeight : 1,
+      );
+
+      if (!mounted) {
+        if (textureId != null) {
+          await widget.bridge.disposeTexture(textureId: textureId);
+        }
+        return;
+      }
+      if (textureId == null) {
+        widget.onLog?.call('texture unavailable, fallback to software mode');
+        return;
+      }
+
+      final ui.Image? previousImage = _frameImage;
+      setState(() {
+        _textureId = textureId;
+        _frameImage = null;
+      });
+      previousImage?.dispose();
+      widget.onLog?.call('texture mode enabled (id=$textureId)');
+    } finally {
+      _textureInitInFlight = false;
+    }
+  }
+
+  Future<void> _disposeTexture() async {
+    final int? textureId = _textureId;
+    if (textureId == null) {
+      return;
+    }
+    _textureId = null;
+    await widget.bridge.disposeTexture(textureId: textureId);
   }
 
   Future<void> _pollFrame() async {
@@ -125,7 +186,6 @@ class _EngineSurfaceState extends State<EngineSurface> {
       if (frameInfo.width <= 0 || frameInfo.height <= 0) {
         return;
       }
-
       if (frameInfo.frameSerial == _lastFrameSerial) {
         return;
       }
@@ -137,6 +197,29 @@ class _EngineSurfaceState extends State<EngineSurface> {
           'len=${rgbaData.length}, required=$expectedMinLength',
         );
         return;
+      }
+
+      final int? textureId = _textureId;
+      if (textureId != null) {
+        final bool updated = await widget.bridge.updateTextureRgba(
+          textureId: textureId,
+          rgba: rgbaData,
+          width: frameInfo.width,
+          height: frameInfo.height,
+          rowBytes: frameInfo.strideBytes,
+        );
+        if (!updated) {
+          _reportError(
+            'updateTextureRgba failed, fallback to software mode: '
+            '${widget.bridge.engineGetLastError()}',
+          );
+          await _disposeTexture();
+        } else if (mounted) {
+          setState(() {
+            _lastFrameSerial = frameInfo.frameSerial;
+          });
+          return;
+        }
       }
 
       final ui.Image nextImage = await _decodeRgbaFrame(
@@ -314,7 +397,9 @@ class _EngineSurfaceState extends State<EngineSurface> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    if (_frameImage == null)
+                    if (_textureId != null)
+                      Texture(textureId: _textureId!)
+                    else if (_frameImage == null)
                       const Center(
                         child: Text(
                           'Engine Surface (No frame)',
@@ -340,7 +425,8 @@ class _EngineSurfaceState extends State<EngineSurface> {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          '${_surfaceWidth}x$_surfaceHeight  #$_lastFrameSerial',
+                          '${_surfaceWidth}x$_surfaceHeight  #$_lastFrameSerial  '
+                          '${_textureId != null ? "texture" : "software"}',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,

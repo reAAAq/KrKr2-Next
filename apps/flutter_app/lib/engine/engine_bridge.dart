@@ -70,6 +70,15 @@ abstract interface class EngineBridge {
   Future<Uint8List?> engineReadFrameRgba();
   Future<EngineFrameData?> engineReadFrame();
   Future<int> engineSendInput(EngineInputEventData event);
+  Future<int?> createTexture({required int width, required int height});
+  Future<bool> updateTextureRgba({
+    required int textureId,
+    required Uint8List rgba,
+    required int width,
+    required int height,
+    required int rowBytes,
+  });
+  Future<void> disposeTexture({required int textureId});
   Future<int> engineRuntimeApiVersion();
 
   String engineGetLastError();

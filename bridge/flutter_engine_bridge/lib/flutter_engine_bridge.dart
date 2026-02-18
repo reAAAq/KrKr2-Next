@@ -182,6 +182,45 @@ class FlutterEngineBridge {
     );
   }
 
+  Future<int?> createTexture({required int width, required int height}) async {
+    try {
+      return await _platform.createTexture(width: width, height: height);
+    } catch (error) {
+      _fallbackLastError = 'createTexture failed: $error';
+      return null;
+    }
+  }
+
+  Future<bool> updateTextureRgba({
+    required int textureId,
+    required Uint8List rgba,
+    required int width,
+    required int height,
+    required int rowBytes,
+  }) async {
+    try {
+      await _platform.updateTextureRgba(
+        textureId: textureId,
+        rgba: rgba,
+        width: width,
+        height: height,
+        rowBytes: rowBytes,
+      );
+      return true;
+    } catch (error) {
+      _fallbackLastError = 'updateTextureRgba failed: $error';
+      return false;
+    }
+  }
+
+  Future<void> disposeTexture({required int textureId}) async {
+    try {
+      await _platform.disposeTexture(textureId: textureId);
+    } catch (error) {
+      _fallbackLastError = 'disposeTexture failed: $error';
+    }
+  }
+
   Future<int> engineRuntimeApiVersion() async {
     final ffi = _ffiBridge;
     if (ffi == null) {

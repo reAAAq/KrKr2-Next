@@ -70,6 +70,7 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage>
   bool _busy = false;
   bool _tickInFlight = false;
   bool _isTicking = false;
+  bool _preferTextureSurface = true;
   bool _autoPausedByLifecycle = false;
   bool _resumeTickLoopAfterLifecyclePause = false;
   bool _lifecycleTransitionInFlight = false;
@@ -703,6 +704,7 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage>
                 EngineSurface(
                   bridge: _bridge,
                   active: isSurfaceActive,
+                  preferTexture: _preferTextureSurface,
                   onLog: (String message) {
                     _appendLog('surface: $message');
                   },
@@ -715,6 +717,26 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage>
                   },
                 ),
                 const SizedBox(height: 8),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Prefer Texture Surface'),
+                  subtitle: const Text(
+                    'Use native texture when available, fallback to software if unavailable.',
+                  ),
+                  value: _preferTextureSurface,
+                  onChanged: _busy
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _preferTextureSurface = value;
+                          });
+                          _appendLog(
+                            'surface mode preference: ${value ? "texture" : "software"}',
+                          );
+                        },
+                ),
+                const SizedBox(height: 4),
                 const Text(
                   'Tip: Click the surface to focus, then keyboard input will be forwarded.',
                   textAlign: TextAlign.center,
