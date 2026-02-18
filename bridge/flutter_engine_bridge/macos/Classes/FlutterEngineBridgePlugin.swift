@@ -1,10 +1,13 @@
 import Cocoa
 import CoreVideo
 import FlutterMacOS
+import Accelerate
 
 private final class EngineHostTexture: NSObject, FlutterTexture {
   private let lock = NSLock()
   private var pixelBuffer: CVPixelBuffer?
+  private var pixelWidth: Int = 0
+  private var pixelHeight: Int = 0
 
   func copyPixelBuffer() -> Unmanaged<CVPixelBuffer>? {
     lock.lock()
@@ -25,23 +28,35 @@ private final class EngineHostTexture: NSObject, FlutterTexture {
       return false
     }
 
-    var buffer: CVPixelBuffer?
-    let attrs: [CFString: Any] = [
-      kCVPixelBufferCGImageCompatibilityKey: true,
-      kCVPixelBufferCGBitmapContextCompatibilityKey: true,
-      kCVPixelBufferIOSurfacePropertiesKey: [:],
-    ]
-    let status = CVPixelBufferCreate(
-      kCFAllocatorDefault,
-      width,
-      height,
-      kCVPixelFormatType_32BGRA,
-      attrs as CFDictionary,
-      &buffer
-    )
-    guard status == kCVReturnSuccess, let pixelBuffer = buffer else {
+    lock.lock()
+    if pixelBuffer == nil || pixelWidth != width || pixelHeight != height {
+      var buffer: CVPixelBuffer?
+      let attrs: [CFString: Any] = [
+        kCVPixelBufferCGImageCompatibilityKey: true,
+        kCVPixelBufferCGBitmapContextCompatibilityKey: true,
+        kCVPixelBufferIOSurfacePropertiesKey: [:],
+      ]
+      let status = CVPixelBufferCreate(
+        kCFAllocatorDefault,
+        width,
+        height,
+        kCVPixelFormatType_32BGRA,
+        attrs as CFDictionary,
+        &buffer
+      )
+      guard status == kCVReturnSuccess, let newBuffer = buffer else {
+        lock.unlock()
+        return false
+      }
+      pixelBuffer = newBuffer
+      pixelWidth = width
+      pixelHeight = height
+    }
+    guard let pixelBuffer else {
+      lock.unlock()
       return false
     }
+    lock.unlock()
 
     CVPixelBufferLockBaseAddress(pixelBuffer, [])
     defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
@@ -49,34 +64,31 @@ private final class EngineHostTexture: NSObject, FlutterTexture {
       return false
     }
     let targetStride = CVPixelBufferGetBytesPerRow(pixelBuffer)
-    rgbaData.withUnsafeBytes { bytes in
+    return rgbaData.withUnsafeBytes { bytes in
       guard let srcBase = bytes.baseAddress else {
-        return
+        return false
       }
-      let srcRows = srcBase.assumingMemoryBound(to: UInt8.self)
-      let dstRows = baseAddress.assumingMemoryBound(to: UInt8.self)
-
-      for y in 0..<height {
-        let src = srcRows.advanced(by: y * rowBytes)
-        let dst = dstRows.advanced(by: y * targetStride)
-        for x in 0..<width {
-          let idx = x * 4
-          let r = src[idx]
-          let g = src[idx + 1]
-          let b = src[idx + 2]
-          let a = src[idx + 3]
-          dst[idx] = b
-          dst[idx + 1] = g
-          dst[idx + 2] = r
-          dst[idx + 3] = a
-        }
-      }
+      var srcBuffer = vImage_Buffer(
+        data: UnsafeMutableRawPointer(mutating: srcBase),
+        height: vImagePixelCount(height),
+        width: vImagePixelCount(width),
+        rowBytes: rowBytes
+      )
+      var dstBuffer = vImage_Buffer(
+        data: baseAddress,
+        height: vImagePixelCount(height),
+        width: vImagePixelCount(width),
+        rowBytes: targetStride
+      )
+      var map: [UInt8] = [2, 1, 0, 3]  // RGBA -> BGRA
+      let convertResult = vImagePermuteChannels_ARGB8888(
+        &srcBuffer,
+        &dstBuffer,
+        &map,
+        vImage_Flags(kvImageNoFlags)
+      )
+      return convertResult == kvImageNoError
     }
-
-    lock.lock()
-    self.pixelBuffer = pixelBuffer
-    lock.unlock()
-    return true
   }
 }
 

@@ -2,6 +2,7 @@
 
 #if defined(ENGINE_API_USE_KRKR2_RUNTIME)
 
+#include <algorithm>
 #include <cstring>
 #include <new>
 #include <string>
@@ -9,15 +10,18 @@
 #include <mutex>
 #include <thread>
 #include <memory>
+#include <vector>
 
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
+#include "base/CCDirector.h"
 #include "environ/Application.h"
 #include "environ/cocos2d/AppDelegate.h"
 #include "environ/cocos2d/MainScene.h"
 #include "base/SysInitIntf.h"
 #include "base/impl/SysInitImpl.h"
+#include "visual/ogl/ogl_common.h"
 
 int TVPDrawSceneOnce(int interval);
 
@@ -30,6 +34,11 @@ struct engine_handle_s {
   uint32_t surface_width = 1280;
   uint32_t surface_height = 720;
   uint64_t frame_serial = 0;
+  uint32_t frame_width = 0;
+  uint32_t frame_height = 0;
+  uint32_t frame_stride_bytes = 0;
+  std::vector<uint8_t> frame_rgba;
+  bool frame_ready = false;
 };
 
 namespace {
@@ -138,6 +147,95 @@ bool EnsureHostCocosRuntimeInitialized() {
     return false;
   }
   g_cocos_bootstrapped = true;
+  return true;
+}
+
+struct FrameReadbackLayout {
+  int32_t read_x = 0;
+  int32_t read_y = 0;
+  uint32_t width = 0;
+  uint32_t height = 0;
+  uint32_t stride_bytes = 0;
+};
+
+FrameReadbackLayout GetFrameReadbackLayoutLocked(engine_handle_s* impl) {
+  FrameReadbackLayout layout;
+  layout.width = impl->surface_width;
+  layout.height = impl->surface_height;
+
+  GLint viewport[4] = {0, 0, 0, 0};
+  glGetIntegerv(GL_VIEWPORT, viewport);
+  if (glGetError() == GL_NO_ERROR && viewport[2] > 0 && viewport[3] > 0) {
+    layout.read_x = viewport[0];
+    layout.read_y = viewport[1];
+    layout.width = static_cast<uint32_t>(viewport[2]);
+    layout.height = static_cast<uint32_t>(viewport[3]);
+  } else if (auto* director = cocos2d::Director::getInstance();
+             director != nullptr) {
+    if (auto* gl_view = director->getOpenGLView(); gl_view != nullptr) {
+      const cocos2d::Size frame_size = gl_view->getFrameSize();
+      if (frame_size.width > 0.f && frame_size.height > 0.f) {
+        layout.width = static_cast<uint32_t>(frame_size.width);
+        layout.height = static_cast<uint32_t>(frame_size.height);
+      }
+    }
+  }
+
+  if (layout.width == 0) {
+    layout.width = 1;
+  }
+  if (layout.height == 0) {
+    layout.height = 1;
+  }
+  layout.stride_bytes = layout.width * 4u;
+  return layout;
+}
+
+bool ReadCurrentFrameRgba(const FrameReadbackLayout& layout, void* out_pixels) {
+  if (layout.width == 0 || layout.height == 0 || out_pixels == nullptr) {
+    return false;
+  }
+
+#if defined(TARGET_OS_MAC) && TARGET_OS_MAC && !TARGET_OS_IPHONE
+  GLint previous_read_buffer = GL_BACK;
+  glGetIntegerv(GL_READ_BUFFER, &previous_read_buffer);
+  glReadBuffer(GL_FRONT);
+#endif
+
+  glFinish();
+  glPixelStorei(GL_PACK_ALIGNMENT, 4);
+  glReadPixels(static_cast<GLint>(layout.read_x),
+               static_cast<GLint>(layout.read_y),
+               static_cast<GLsizei>(layout.width),
+               static_cast<GLsizei>(layout.height), GL_RGBA,
+               GL_UNSIGNED_BYTE, out_pixels);
+  const GLenum read_pixels_error = glGetError();
+
+#if defined(TARGET_OS_MAC) && TARGET_OS_MAC && !TARGET_OS_IPHONE
+  glReadBuffer(previous_read_buffer);
+  const GLenum restore_read_buffer_error = glGetError();
+  if (restore_read_buffer_error != GL_NO_ERROR) {
+    return false;
+  }
+#endif
+
+  if (read_pixels_error != GL_NO_ERROR) {
+    return false;
+  }
+
+  auto* bytes = static_cast<uint8_t*>(out_pixels);
+  const size_t row_bytes = static_cast<size_t>(layout.stride_bytes);
+  std::vector<uint8_t> row_buffer(row_bytes);
+  const uint32_t half_rows = layout.height / 2u;
+  for (uint32_t y = 0; y < half_rows; ++y) {
+    uint8_t* row_top = bytes + static_cast<size_t>(y) * row_bytes;
+    uint8_t* row_bottom =
+        bytes + static_cast<size_t>(layout.height - 1u - y) * row_bytes;
+    std::memcpy(row_buffer.data(), row_top, row_bytes);
+    std::memcpy(row_top, row_bottom, row_bytes);
+    std::memcpy(row_bottom, row_buffer.data(), row_bytes);
+  }
+
   return true;
 }
 
@@ -342,6 +440,11 @@ engine_result_t engine_open_game(engine_handle_t handle,
   g_runtime_started_once = true;
 
   impl->runtime_owner = true;
+  impl->frame_width = 0;
+  impl->frame_height = 0;
+  impl->frame_stride_bytes = 0;
+  impl->frame_rgba.clear();
+  impl->frame_ready = false;
   impl->state = ToStateValue(EngineState::kOpened);
   ClearHandleErrorLocked(impl);
   SetThreadError(nullptr);
@@ -400,7 +503,29 @@ engine_result_t engine_tick(engine_handle_t handle, uint32_t delta_ms) {
         "runtime requested termination");
   }
 
-  impl->frame_serial += 1;
+  const FrameReadbackLayout layout = GetFrameReadbackLayoutLocked(impl);
+  const size_t required_size =
+      static_cast<size_t>(layout.stride_bytes) *
+      static_cast<size_t>(layout.height);
+  if (impl->frame_rgba.size() != required_size) {
+    impl->frame_rgba.assign(required_size, 0);
+  }
+
+  if (required_size > 0 &&
+      ReadCurrentFrameRgba(layout, impl->frame_rgba.data())) {
+    impl->frame_width = layout.width;
+    impl->frame_height = layout.height;
+    impl->frame_stride_bytes = layout.stride_bytes;
+    impl->frame_ready = true;
+    impl->frame_serial += 1;
+  } else if (!impl->frame_ready && required_size > 0) {
+    std::fill(impl->frame_rgba.begin(), impl->frame_rgba.end(), 0);
+    impl->frame_width = layout.width;
+    impl->frame_height = layout.height;
+    impl->frame_stride_bytes = layout.stride_bytes;
+    impl->frame_ready = true;
+    impl->frame_serial += 1;
+  }
 
   ClearHandleErrorLocked(impl);
   SetThreadError(nullptr);
@@ -544,6 +669,11 @@ engine_result_t engine_set_surface_size(engine_handle_t handle,
 
   impl->surface_width = width;
   impl->surface_height = height;
+  impl->frame_width = 0;
+  impl->frame_height = 0;
+  impl->frame_stride_bytes = 0;
+  impl->frame_rgba.clear();
+  impl->frame_ready = false;
   ClearHandleErrorLocked(impl);
   SetThreadError(nullptr);
   return ENGINE_RESULT_OK;
@@ -579,11 +709,21 @@ engine_result_t engine_get_frame_desc(engine_handle_t handle,
                                          "engine is already destroyed");
   }
 
+  FrameReadbackLayout layout;
+  if (impl->frame_ready && impl->frame_width > 0 && impl->frame_height > 0 &&
+      impl->frame_stride_bytes > 0) {
+    layout.width = impl->frame_width;
+    layout.height = impl->frame_height;
+    layout.stride_bytes = impl->frame_stride_bytes;
+  } else {
+    layout = GetFrameReadbackLayoutLocked(impl);
+  }
+
   std::memset(out_frame_desc, 0, sizeof(*out_frame_desc));
   out_frame_desc->struct_size = sizeof(engine_frame_desc_t);
-  out_frame_desc->width = impl->surface_width;
-  out_frame_desc->height = impl->surface_height;
-  out_frame_desc->stride_bytes = impl->surface_width * 4u;
+  out_frame_desc->width = layout.width;
+  out_frame_desc->height = layout.height;
+  out_frame_desc->stride_bytes = layout.stride_bytes;
   out_frame_desc->pixel_format = ENGINE_PIXEL_FORMAT_RGBA8888;
   out_frame_desc->frame_serial = impl->frame_serial;
 
@@ -621,9 +761,27 @@ engine_result_t engine_read_frame_rgba(engine_handle_t handle,
         "engine_open_game must succeed before engine_read_frame_rgba");
   }
 
+  FrameReadbackLayout layout;
+  if (impl->frame_ready && impl->frame_width > 0 && impl->frame_height > 0 &&
+      impl->frame_stride_bytes > 0) {
+    layout.width = impl->frame_width;
+    layout.height = impl->frame_height;
+    layout.stride_bytes = impl->frame_stride_bytes;
+  } else {
+    layout = GetFrameReadbackLayoutLocked(impl);
+    const size_t required_size =
+        static_cast<size_t>(layout.stride_bytes) *
+        static_cast<size_t>(layout.height);
+    impl->frame_rgba.assign(required_size, 0);
+    impl->frame_width = layout.width;
+    impl->frame_height = layout.height;
+    impl->frame_stride_bytes = layout.stride_bytes;
+    impl->frame_ready = true;
+  }
+
   const size_t required_size =
-      static_cast<size_t>(impl->surface_width) *
-      static_cast<size_t>(impl->surface_height) * 4u;
+      static_cast<size_t>(layout.stride_bytes) *
+      static_cast<size_t>(layout.height);
   if (out_pixels_size < required_size) {
     return SetHandleErrorAndReturnLocked(
         impl,
@@ -631,7 +789,11 @@ engine_result_t engine_read_frame_rgba(engine_handle_t handle,
         "out_pixels_size is smaller than required frame buffer size");
   }
 
-  std::memset(out_pixels, 0, required_size);
+  if (impl->frame_rgba.size() < required_size) {
+    impl->frame_rgba.resize(required_size, 0);
+  }
+  std::memcpy(out_pixels, impl->frame_rgba.data(), required_size);
+
   ClearHandleErrorLocked(impl);
   SetThreadError(nullptr);
   return ENGINE_RESULT_OK;

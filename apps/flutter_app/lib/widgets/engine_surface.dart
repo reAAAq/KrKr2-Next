@@ -24,7 +24,7 @@ class EngineSurface extends StatefulWidget {
     required this.bridge,
     required this.active,
     this.preferTexture = true,
-    this.pollInterval = const Duration(milliseconds: 33),
+    this.pollInterval = const Duration(milliseconds: 16),
     this.onLog,
     this.onError,
   });
@@ -49,6 +49,9 @@ class _EngineSurfaceState extends State<EngineSurface> {
   int _lastFrameSerial = -1;
   int _surfaceWidth = 0;
   int _surfaceHeight = 0;
+  int _frameWidth = 0;
+  int _frameHeight = 0;
+  double _devicePixelRatio = 1.0;
   int? _textureId;
 
   @override
@@ -95,12 +98,16 @@ class _EngineSurfaceState extends State<EngineSurface> {
     unawaited(_pollFrame());
   }
 
-  Future<void> _ensureSurfaceSize(Size size) async {
+  Future<void> _ensureSurfaceSize(Size size, double devicePixelRatio) async {
     if (!widget.active) {
       return;
     }
-    final int width = size.width.round().clamp(1, 16384);
-    final int height = size.height.round().clamp(1, 16384);
+    _devicePixelRatio = devicePixelRatio <= 0 ? 1.0 : devicePixelRatio;
+    final int width = (size.width * _devicePixelRatio).round().clamp(1, 16384);
+    final int height = (size.height * _devicePixelRatio).round().clamp(
+      1,
+      16384,
+    );
     if (width == _surfaceWidth && height == _surfaceHeight) {
       await _ensureTexture();
       return;
@@ -118,7 +125,9 @@ class _EngineSurfaceState extends State<EngineSurface> {
       );
       return;
     }
-    widget.onLog?.call('surface resized: ${width}x$height');
+    widget.onLog?.call(
+      'surface resized: ${width}x$height (dpr=${_devicePixelRatio.toStringAsFixed(2)})',
+    );
     await _ensureTexture();
   }
 
@@ -216,6 +225,8 @@ class _EngineSurfaceState extends State<EngineSurface> {
           await _disposeTexture();
         } else if (mounted) {
           setState(() {
+            _frameWidth = frameInfo.width;
+            _frameHeight = frameInfo.height;
             _lastFrameSerial = frameInfo.frameSerial;
           });
           return;
@@ -237,6 +248,8 @@ class _EngineSurfaceState extends State<EngineSurface> {
       final ui.Image? previousImage = _frameImage;
       setState(() {
         _frameImage = nextImage;
+        _frameWidth = frameInfo.width;
+        _frameHeight = frameInfo.height;
         _lastFrameSerial = frameInfo.frameSerial;
       });
       previousImage?.dispose();
@@ -266,6 +279,25 @@ class _EngineSurfaceState extends State<EngineSurface> {
     widget.onError?.call(message);
   }
 
+  Widget _buildTextureView() {
+    final int width = _frameWidth > 0
+        ? _frameWidth
+        : (_surfaceWidth > 0 ? _surfaceWidth : 1);
+    final int height = _frameHeight > 0
+        ? _frameHeight
+        : (_surfaceHeight > 0 ? _surfaceHeight : 1);
+    return ClipRect(
+      child: FittedBox(
+        fit: BoxFit.cover,
+        child: SizedBox(
+          width: width.toDouble(),
+          height: height.toDouble(),
+          child: Texture(textureId: _textureId!),
+        ),
+      ),
+    );
+  }
+
   void _sendPointer({
     required int type,
     required PointerEvent event,
@@ -280,10 +312,10 @@ class _EngineSurfaceState extends State<EngineSurface> {
         EngineInputEventData(
           type: type,
           timestampMicros: event.timeStamp.inMicroseconds,
-          x: event.localPosition.dx,
-          y: event.localPosition.dy,
-          deltaX: deltaX ?? event.delta.dx,
-          deltaY: deltaY ?? event.delta.dy,
+          x: event.localPosition.dx * _devicePixelRatio,
+          y: event.localPosition.dy * _devicePixelRatio,
+          deltaX: (deltaX ?? event.delta.dx) * _devicePixelRatio,
+          deltaY: (deltaY ?? event.delta.dy) * _devicePixelRatio,
           pointerId: event.pointer,
           button: event.buttons,
         ),
@@ -349,7 +381,8 @@ class _EngineSurfaceState extends State<EngineSurface> {
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           final Size size = Size(constraints.maxWidth, constraints.maxHeight);
-          unawaited(_ensureSurfaceSize(size));
+          final double dpr = MediaQuery.of(context).devicePixelRatio;
+          unawaited(_ensureSurfaceSize(size, dpr));
 
           return Focus(
             focusNode: _focusNode,
@@ -398,7 +431,7 @@ class _EngineSurfaceState extends State<EngineSurface> {
                   fit: StackFit.expand,
                   children: [
                     if (_textureId != null)
-                      Texture(textureId: _textureId!)
+                      _buildTextureView()
                     else if (_frameImage == null)
                       const Center(
                         child: Text(
@@ -425,7 +458,9 @@ class _EngineSurfaceState extends State<EngineSurface> {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          '${_surfaceWidth}x$_surfaceHeight  #$_lastFrameSerial  '
+                          'surface:${_surfaceWidth}x$_surfaceHeight  '
+                          'frame:${_frameWidth}x$_frameHeight  '
+                          '#$_lastFrameSerial  '
                           '${_textureId != null ? "texture" : "software"}',
                           style: const TextStyle(
                             color: Colors.white,
