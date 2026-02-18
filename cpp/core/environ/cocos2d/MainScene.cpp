@@ -2618,8 +2618,9 @@ float TVPMainScene::convertCursorScale(float val /*0 ~ 1*/) {
 iWindowLayer *TVPCreateAndAddWindow(tTJSNI_Window *w) {
     TVPWindowLayer *ret = TVPWindowLayer::create(w);
     TVPMainScene::GetInstance()->addLayer(ret);
-    if(_consoleWin)
-        ret->setVisible(false);
+    // In host mode (_consoleWin == nullptr), windows must be visible
+    // immediately; otherwise scripts run but the scene stays black.
+    ret->setVisible(_consoleWin == nullptr);
     return ret;
 }
 

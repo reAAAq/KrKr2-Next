@@ -14,8 +14,11 @@
 
 #include "environ/Application.h"
 #include "environ/cocos2d/AppDelegate.h"
+#include "environ/cocos2d/MainScene.h"
 #include "base/SysInitIntf.h"
 #include "base/impl/SysInitImpl.h"
+
+int TVPDrawSceneOnce(int interval);
 
 struct engine_handle_s {
   std::mutex mutex;
@@ -324,6 +327,12 @@ engine_result_t engine_open_game(engine_handle_t handle,
         "runtime requested termination during startup");
   }
 
+  // Keep host mode consistent with standalone startup path:
+  // scene update drives Application->Run() and frame presentation.
+  if (auto* scene = TVPMainScene::GetInstance(); scene != nullptr) {
+    scene->scheduleUpdate();
+  }
+
   g_runtime_active = true;
   g_runtime_owner = handle;
   g_runtime_started_once = true;
@@ -375,7 +384,10 @@ engine_result_t engine_tick(engine_handle_t handle, uint32_t delta_ms) {
         "runtime has been terminated");
   }
 
-  Application->Run();
+  // Drive one full frame (scene update + render + swap). In host mode
+  // this is required; calling Application->Run() alone can advance script
+  // and audio while leaving the window visually stale/black.
+  ::TVPDrawSceneOnce(0);
 
   if (TVPTerminated) {
     return SetHandleErrorAndReturnLocked(
