@@ -44,6 +44,7 @@ class EngineBridgeHomePage extends StatefulWidget {
 class _EngineBridgeHomePageState extends State<EngineBridgeHomePage> {
   static const int _engineResultOk = 0;
   static const int _maxEventLogSize = 120;
+  static const int _smokeTickIterations = 3;
   static const String _loading = 'Loading bridge info...';
   static const String _defaultEngineLibraryPath = String.fromEnvironment(
     'KRKR2_ENGINE_LIB',
@@ -308,6 +309,96 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage> {
     }
   }
 
+  Future<void> _runOpenTickSmoke() async {
+    if (_busy || _isTicking) return;
+
+    final String gamePath = _gamePathController.text.trim();
+    if (gamePath.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _lastResult = 'open_tick_smoke => skipped';
+        _lastError = 'Last error: game path is empty';
+        _engineStatus = 'Open+Tick failed';
+      });
+      _appendLog('open_tick_smoke skipped: game path is empty');
+      return;
+    }
+
+    _setBusy(true);
+    _appendLog('open_tick_smoke started: path=$gamePath');
+    try {
+      final int createResult = await _bridge.engineCreate();
+      if (createResult != _engineResultOk) {
+        final String error = _bridge.engineGetLastError();
+        if (!mounted) return;
+        setState(() {
+          _lastResult = 'open_tick_smoke/create => $createResult';
+          _lastError = error.isEmpty
+              ? 'Last error: <empty>'
+              : 'Last error: $error';
+          _engineStatus = 'Open+Tick failed';
+        });
+        _appendLog(
+          'open_tick_smoke create failed: result=$createResult, '
+          'error=${error.isEmpty ? "<empty>" : error}',
+        );
+        return;
+      }
+
+      final int openResult = await _bridge.engineOpenGame(gamePath);
+      if (openResult != _engineResultOk) {
+        final String error = _bridge.engineGetLastError();
+        if (!mounted) return;
+        setState(() {
+          _lastResult = 'open_tick_smoke/open => $openResult';
+          _lastError = error.isEmpty
+              ? 'Last error: <empty>'
+              : 'Last error: $error';
+          _engineStatus = 'Open+Tick failed';
+        });
+        _appendLog(
+          'open_tick_smoke open failed: result=$openResult, '
+          'error=${error.isEmpty ? "<empty>" : error}',
+        );
+        return;
+      }
+
+      for (int i = 0; i < _smokeTickIterations; i++) {
+        final int tickResult = await _bridge.engineTick(deltaMs: 16);
+        if (tickResult != _engineResultOk) {
+          final String error = _bridge.engineGetLastError();
+          if (!mounted) return;
+          setState(() {
+            _lastResult = 'open_tick_smoke/tick#$i => $tickResult';
+            _lastError = error.isEmpty
+                ? 'Last error: <empty>'
+                : 'Last error: $error';
+            _engineStatus = 'Open+Tick failed';
+          });
+          _appendLog(
+            'open_tick_smoke tick failed: step=$i, result=$tickResult, '
+            'error=${error.isEmpty ? "<empty>" : error}',
+          );
+          return;
+        }
+      }
+
+      final String error = _bridge.engineGetLastError();
+      if (!mounted) return;
+      setState(() {
+        _tickCount += _smokeTickIterations;
+        _lastResult = 'open_tick_smoke => 0';
+        _lastError = error.isEmpty
+            ? 'Last error: <empty>'
+            : 'Last error: $error';
+        _engineStatus = 'Opened';
+      });
+      _appendLog('open_tick_smoke passed: ticks=$_smokeTickIterations');
+    } finally {
+      _setBusy(false);
+    }
+  }
+
   Future<void> _startTickLoop() async {
     if (_isTicking || _busy) return;
     if (_engineStatus != 'Opened') {
@@ -557,6 +648,12 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage> {
                     OutlinedButton(
                       onPressed: (_busy || _isTicking) ? null : _engineOpenGame,
                       child: const Text('engine_open_game'),
+                    ),
+                    ElevatedButton(
+                      onPressed: (_busy || _isTicking)
+                          ? null
+                          : _runOpenTickSmoke,
+                      child: const Text('Run Open+Tick Smoke'),
                     ),
                     FilledButton.tonal(
                       onPressed: (_busy || _isTicking)

@@ -89,6 +89,7 @@ void main() {
     expect(find.textContaining('Engine bridge status'), findsOneWidget);
     expect(find.text('engine_create'), findsOneWidget);
     expect(find.text('engine_open_game'), findsOneWidget);
+    expect(find.text('Run Open+Tick Smoke'), findsOneWidget);
     expect(find.text('Start Tick'), findsOneWidget);
     expect(find.text('engine_destroy'), findsOneWidget);
     expect(find.text('engine_pause'), findsOneWidget);
@@ -123,5 +124,33 @@ void main() {
     await tester.pumpAndSettle();
     expect(fakeBridge.destroyCalls, 1);
     expect(find.textContaining('Engine status: Not created'), findsOneWidget);
+  });
+
+  testWidgets('open+tick smoke calls create/open/tick in order', (
+    WidgetTester tester,
+  ) async {
+    final fakeBridge = _FakeEngineBridge();
+    await tester.pumpWidget(
+      FlutterShellApp(
+        engineBridgeBuilder: ({String? ffiLibraryPath}) => fakeBridge,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final smokeButton = find.widgetWithText(
+      ElevatedButton,
+      'Run Open+Tick Smoke',
+    );
+    await tester.ensureVisible(smokeButton);
+    await tester.tap(smokeButton);
+    await tester.pumpAndSettle();
+
+    expect(fakeBridge.createCalls, 1);
+    expect(fakeBridge.openGameCalls, 1);
+    expect(fakeBridge.tickCalls, 3);
+    expect(
+      find.textContaining('Last result: open_tick_smoke => 0'),
+      findsOneWidget,
+    );
   });
 }
