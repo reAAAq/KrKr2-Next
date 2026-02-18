@@ -31,10 +31,14 @@ class EngineBridgeHomePage extends StatefulWidget {
 
 class _EngineBridgeHomePageState extends State<EngineBridgeHomePage> {
   static const int _engineResultOk = 0;
+  static const int _maxEventLogSize = 120;
   static const String _loading = 'Loading bridge info...';
 
   final FlutterEngineBridge _bridge = FlutterEngineBridge();
   final TextEditingController _gamePathController = TextEditingController(text: '.');
+  final TextEditingController _optionKeyController =
+      TextEditingController(text: 'fps_limit');
+  final TextEditingController _optionValueController = TextEditingController(text: '60');
 
   Timer? _tickTimer;
   bool _busy = false;
@@ -46,12 +50,14 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage> {
   String _engineStatus = 'Not created';
   String _lastResult = 'N/A';
   String _lastError = 'Last error: <empty>';
+  final List<String> _eventLogs = <String>[];
 
   int _tickCount = 0;
 
   @override
   void initState() {
     super.initState();
+    _appendLog('App started');
     _loadBridgeInfo();
   }
 
@@ -59,6 +65,8 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage> {
   void dispose() {
     _stopTickLoop(updateStatus: false, notify: false);
     _gamePathController.dispose();
+    _optionKeyController.dispose();
+    _optionValueController.dispose();
     super.dispose();
   }
 
@@ -74,12 +82,14 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage> {
         _platformInfo = platform ?? 'No platform info returned from plugin.';
         _lastError = error.isEmpty ? 'Last error: <empty>' : 'Last error: $error';
       });
+      _appendLog('Bridge ready: backend=$backend, platform=$_platformInfo');
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _backendInfo = 'Bridge detect failed: $e';
         _platformInfo = 'Plugin call failed: $e';
       });
+      _appendLog('Bridge detect failed: $e');
     } finally {
       _setBusy(false);
     }
@@ -114,6 +124,7 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage> {
         _lastError = 'Last error: game path is empty';
         _engineStatus = 'Open failed';
       });
+      _appendLog('engine_open_game skipped: game path is empty');
       return;
     }
 
@@ -152,6 +163,72 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage> {
     }
   }
 
+  Future<void> _enginePause() async {
+    if (_busy) return;
+    _setBusy(true);
+    try {
+      final int result = await _bridge.enginePause();
+      _syncResult(
+        apiName: 'engine_pause',
+        result: result,
+        successStatus: 'Paused',
+        failureStatus: 'Pause failed',
+      );
+      if (result == _engineResultOk) {
+        _stopTickLoop(updateStatus: false);
+      }
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  Future<void> _engineResume() async {
+    if (_busy) return;
+    _setBusy(true);
+    try {
+      final int result = await _bridge.engineResume();
+      _syncResult(
+        apiName: 'engine_resume',
+        result: result,
+        successStatus: 'Opened',
+        failureStatus: 'Resume failed',
+      );
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  Future<void> _engineSetOption() async {
+    final String key = _optionKeyController.text.trim();
+    final String value = _optionValueController.text.trim();
+    if (key.isEmpty) {
+      _appendLog('engine_set_option skipped: key is empty');
+      if (!mounted) return;
+      setState(() {
+        _lastResult = 'engine_set_option => skipped';
+        _lastError = 'Last error: option key is empty';
+      });
+      return;
+    }
+
+    _setBusy(true);
+    try {
+      final int result = await _bridge.engineSetOption(key: key, value: value);
+      final String error = _bridge.engineGetLastError();
+      if (!mounted) return;
+      setState(() {
+        _lastResult = 'engine_set_option($key=$value) => $result';
+        _lastError = error.isEmpty ? 'Last error: <empty>' : 'Last error: $error';
+      });
+      _appendLog(
+        'engine_set_option($key=$value) => $result, '
+        'error=${error.isEmpty ? "<empty>" : error}',
+      );
+    } finally {
+      _setBusy(false);
+    }
+  }
+
   Future<void> _startTickLoop() async {
     if (_isTicking || _busy) return;
     if (_engineStatus != 'Opened') {
@@ -160,6 +237,7 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage> {
         _lastResult = 'engine_tick => skipped';
         _lastError = 'Last error: open game first';
       });
+      _appendLog('Start Tick blocked: open game first');
       return;
     }
 
@@ -167,6 +245,7 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage> {
       _isTicking = true;
       _engineStatus = 'Ticking';
     });
+    _appendLog('Tick loop started (16ms interval)');
 
     _tickTimer = Timer.periodic(const Duration(milliseconds: 16), (timer) async {
       if (_tickInFlight) {
@@ -185,6 +264,7 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage> {
             _lastResult = 'engine_tick => $result';
             _lastError = error.isEmpty ? 'Last error: <empty>' : 'Last error: $error';
           });
+          _appendLog('Tick faulted: result=$result, error=${error.isEmpty ? "<empty>" : error}');
           return;
         }
 
@@ -193,6 +273,9 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage> {
           _lastResult = 'engine_tick => $result';
           _lastError = error.isEmpty ? 'Last error: <empty>' : 'Last error: $error';
         });
+        if (_tickCount % 120 == 0) {
+          _appendLog('Tick alive: count=$_tickCount');
+        }
       } finally {
         _tickInFlight = false;
       }
@@ -218,6 +301,9 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage> {
       return;
     }
     updateFields();
+    if (updateStatus) {
+      _appendLog('Tick loop stopped');
+    }
   }
 
   void _setBusy(bool value) {
@@ -240,6 +326,36 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage> {
       _engineStatus = result == _engineResultOk ? successStatus : failureStatus;
       _lastError = error.isEmpty ? 'Last error: <empty>' : 'Last error: $error';
     });
+    _appendLog(
+      '$apiName => $result, status=$_engineStatus, error=${error.isEmpty ? "<empty>" : error}',
+    );
+  }
+
+  void _clearLogs() {
+    if (!mounted) return;
+    setState(() {
+      _eventLogs.clear();
+    });
+    _appendLog('Logs cleared');
+  }
+
+  void _appendLog(String message, {bool notify = true}) {
+    final DateTime now = DateTime.now();
+    final String time =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+    final String line = '[$time] $message';
+    void updateLogs() {
+      _eventLogs.insert(0, line);
+      if (_eventLogs.length > _maxEventLogSize) {
+        _eventLogs.removeRange(_maxEventLogSize, _eventLogs.length);
+      }
+    }
+
+    if (notify && mounted) {
+      setState(updateLogs);
+      return;
+    }
+    updateLogs();
   }
 
   @override
@@ -290,6 +406,33 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage> {
                     hintText: 'Enter game root path, e.g. .',
                   ),
                 ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: TextField(
+                        controller: _optionKeyController,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: 'Option key',
+                          hintText: 'fps_limit',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _optionValueController,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: 'Option value',
+                          hintText: '60',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 16),
                 if (_busy) const Center(child: CircularProgressIndicator()),
                 if (_busy) const SizedBox(height: 16),
@@ -318,7 +461,60 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage> {
                       onPressed: _busy ? null : _engineDestroy,
                       child: const Text('engine_destroy'),
                     ),
+                    OutlinedButton(
+                      onPressed: (_busy || _isTicking) ? null : _enginePause,
+                      child: const Text('engine_pause'),
+                    ),
+                    OutlinedButton(
+                      onPressed: (_busy || _isTicking) ? null : _engineResume,
+                      child: const Text('engine_resume'),
+                    ),
+                    ElevatedButton(
+                      onPressed: (_busy || _isTicking) ? null : _engineSetOption,
+                      child: const Text('engine_set_option'),
+                    ),
                   ],
+                ),
+                const SizedBox(height: 20),
+                const Divider(),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(
+                      'Event logs',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: _eventLogs.isEmpty ? null : _clearLogs,
+                      child: const Text('Clear logs'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  height: 220,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Theme.of(context).dividerColor),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: _eventLogs.isEmpty
+                      ? const Center(child: Text('No logs yet'))
+                      : ListView.builder(
+                          itemCount: _eventLogs.length,
+                          itemBuilder: (context, index) {
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              child: Text(
+                                _eventLogs[index],
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            );
+                          },
+                        ),
                 ),
               ],
             ),

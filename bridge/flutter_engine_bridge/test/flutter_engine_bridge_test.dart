@@ -55,4 +55,21 @@ void main() {
       contains('FFI unavailable for engine_get_runtime_api_version'),
     );
   });
+
+  test('enginePause and engineResume return not_supported on fallback path', () async {
+    final MockFlutterEngineBridgePlatform fakePlatform = MockFlutterEngineBridgePlatform();
+    final FlutterEngineBridge bridge = FlutterEngineBridge(platform: fakePlatform);
+
+    expect(await bridge.enginePause(), -3);
+    expect(await bridge.engineResume(), -3);
+  });
+
+  test('engineSetOption returns not_supported on fallback path', () async {
+    final MockFlutterEngineBridgePlatform fakePlatform = MockFlutterEngineBridgePlatform();
+    final FlutterEngineBridge bridge = FlutterEngineBridge(platform: fakePlatform);
+
+    final int result = await bridge.engineSetOption(key: 'fps_limit', value: '60');
+    expect(result, -3);
+    expect(bridge.engineGetLastError(), contains('FFI unavailable for engine_set_option'));
+  });
 }

@@ -36,6 +36,20 @@ final class EngineCreateDesc extends Struct {
   external Pointer<Void> reservedPtr3;
 }
 
+final class EngineOption extends Struct {
+  external Pointer<Utf8> keyUtf8;
+  external Pointer<Utf8> valueUtf8;
+
+  @Uint64()
+  external int reservedU640;
+
+  @Uint64()
+  external int reservedU641;
+
+  external Pointer<Void> reservedPtr0;
+  external Pointer<Void> reservedPtr1;
+}
+
 typedef _EngineGetRuntimeApiVersionNative = Int32 Function(Pointer<Uint32>);
 typedef _EngineGetRuntimeApiVersionDart = int Function(Pointer<Uint32>);
 
@@ -65,6 +79,15 @@ typedef _EngineOpenGameDart = int Function(
 typedef _EngineTickNative = Int32 Function(Pointer<Void>, Uint32);
 typedef _EngineTickDart = int Function(Pointer<Void>, int);
 
+typedef _EnginePauseNative = Int32 Function(Pointer<Void>);
+typedef _EnginePauseDart = int Function(Pointer<Void>);
+
+typedef _EngineResumeNative = Int32 Function(Pointer<Void>);
+typedef _EngineResumeDart = int Function(Pointer<Void>);
+
+typedef _EngineSetOptionNative = Int32 Function(Pointer<Void>, Pointer<EngineOption>);
+typedef _EngineSetOptionDart = int Function(Pointer<Void>, Pointer<EngineOption>);
+
 typedef _EngineGetLastErrorNative = Pointer<Utf8> Function(Pointer<Void>);
 typedef _EngineGetLastErrorDart = Pointer<Utf8> Function(Pointer<Void>);
 
@@ -86,6 +109,15 @@ class EngineBindings {
       engineTick = library.lookupFunction<_EngineTickNative, _EngineTickDart>(
         'engine_tick',
       ),
+      enginePause = library.lookupFunction<_EnginePauseNative, _EnginePauseDart>(
+        'engine_pause',
+      ),
+      engineResume = library.lookupFunction<_EngineResumeNative, _EngineResumeDart>(
+        'engine_resume',
+      ),
+      engineSetOption = library.lookupFunction<_EngineSetOptionNative, _EngineSetOptionDart>(
+        'engine_set_option',
+      ),
       engineGetLastError = library.lookupFunction<
         _EngineGetLastErrorNative,
         _EngineGetLastErrorDart
@@ -96,6 +128,9 @@ class EngineBindings {
   final int Function(Pointer<Void>) engineDestroy;
   final int Function(Pointer<Void>, Pointer<Utf8>, Pointer<Utf8>) engineOpenGame;
   final int Function(Pointer<Void>, int) engineTick;
+  final int Function(Pointer<Void>) enginePause;
+  final int Function(Pointer<Void>) engineResume;
+  final int Function(Pointer<Void>, Pointer<EngineOption>) engineSetOption;
   final Pointer<Utf8> Function(Pointer<Void>) engineGetLastError;
 
   static DynamicLibrary? tryLoadLibrary({String? overridePath}) {

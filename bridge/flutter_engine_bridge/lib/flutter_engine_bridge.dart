@@ -57,6 +57,30 @@ class FlutterEngineBridge {
     );
   }
 
+  Future<int> enginePause() async {
+    return _withFfiCall(
+      apiName: 'engine_pause',
+      call: (ffi) => ffi.pause(),
+    );
+  }
+
+  Future<int> engineResume() async {
+    return _withFfiCall(
+      apiName: 'engine_resume',
+      call: (ffi) => ffi.resume(),
+    );
+  }
+
+  Future<int> engineSetOption({
+    required String key,
+    required String value,
+  }) async {
+    return _withFfiCall(
+      apiName: 'engine_set_option',
+      call: (ffi) => ffi.setOption(key: key, value: value),
+    );
+  }
+
   Future<int> engineRuntimeApiVersion() async {
     final ffi = _ffiBridge;
     if (ffi == null) {

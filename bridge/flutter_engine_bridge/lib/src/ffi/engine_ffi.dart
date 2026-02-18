@@ -109,6 +109,36 @@ class EngineFfiBridge {
     return _bindings.engineTick(_handle, deltaMs);
   }
 
+  int pause() {
+    return _bindings.enginePause(_handle);
+  }
+
+  int resume() {
+    return _bindings.engineResume(_handle);
+  }
+
+  int setOption({
+    required String key,
+    required String value,
+  }) {
+    final option = calloc<EngineOption>();
+    final keyPtr = key.toNativeUtf8();
+    final valuePtr = value.toNativeUtf8();
+    try {
+      option.ref.keyUtf8 = keyPtr;
+      option.ref.valueUtf8 = valuePtr;
+      option.ref.reservedU640 = 0;
+      option.ref.reservedU641 = 0;
+      option.ref.reservedPtr0 = nullptr;
+      option.ref.reservedPtr1 = nullptr;
+      return _bindings.engineSetOption(_handle, option);
+    } finally {
+      calloc.free(valuePtr);
+      calloc.free(keyPtr);
+      calloc.free(option);
+    }
+  }
+
   String lastError() {
     final errorPtr = _bindings.engineGetLastError(_handle);
     if (errorPtr == nullptr) {

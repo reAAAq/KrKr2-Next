@@ -13,5 +13,10 @@ void main() {
     expect(find.text('engine_open_game'), findsOneWidget);
     expect(find.text('Start Tick'), findsOneWidget);
     expect(find.text('engine_destroy'), findsOneWidget);
+    expect(find.text('engine_pause'), findsOneWidget);
+    expect(find.text('engine_resume'), findsOneWidget);
+    expect(find.text('engine_set_option'), findsOneWidget);
+    expect(find.text('Event logs'), findsOneWidget);
+    expect(find.text('Clear logs'), findsOneWidget);
   });
 }
