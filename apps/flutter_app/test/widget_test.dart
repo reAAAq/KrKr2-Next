@@ -7,6 +7,8 @@ void main() {
     await tester.pumpWidget(const FlutterShellApp());
 
     expect(find.text('Krkr2 Flutter Shell'), findsWidgets);
-    expect(find.textContaining('Plugin bridge status'), findsOneWidget);
+    expect(find.textContaining('Engine bridge status'), findsOneWidget);
+    expect(find.text('engine_create'), findsOneWidget);
+    expect(find.text('engine_destroy'), findsOneWidget);
   });
 }
