@@ -2002,6 +2002,12 @@ void TVPMainScene::doStartup(float dt, std::string path) {
     if(pGlobalCfgMgr->GetValue<bool>("showfps", false)) {
         _fpsLabel =
             cocos2d::Label::createWithTTF("", "NotoSansCJK-Regular.ttc", 16);
+        if(!_fpsLabel) {
+            _fpsLabel = cocos2d::Label::createWithSystemFont("", "Helvetica", 16);
+        }
+        if(!_fpsLabel) {
+            _fpsLabel = cocos2d::Label::create();
+        }
         _fpsLabel->setAnchorPoint(Vec2(0, 1));
         _fpsLabel->setPosition(Vec2(0, GameNode->getContentSize().height));
         _fpsLabel->setColor(Color3B::WHITE);
@@ -2631,17 +2637,29 @@ void TVPConsoleLog(const ttstr &l, bool important) {
         _consoleWin->addLine(l, important ? Color3B::YELLOW : Color3B::GRAY);
         TVPDrawSceneOnce(100); // force update in 10fps
     }
-    spdlog::get("tjs2")->info("{}", l.AsStdString());
+    if(auto logger = spdlog::get("tjs2"); logger) {
+        logger->info("{}", l.AsStdString());
+    } else {
+        spdlog::info("{}", l.AsStdString());
+    }
 }
 
 namespace TJS {
     void TVPConsoleLog(const ttstr &str) {
-        spdlog::get("tjs2")->info("{}", str.AsStdString());
+        if(auto logger = spdlog::get("tjs2"); logger) {
+            logger->info("{}", str.AsStdString());
+        } else {
+            spdlog::info("{}", str.AsStdString());
+        }
     }
 
     template <typename... Args>
     void TVPConsoleLog(spdlog::format_string_t<Args...> fmt, Args &&...args) {
-        spdlog::get("tjs2")->info(fmt, std::forward<Args>(args)...);
+        if(auto logger = spdlog::get("tjs2"); logger) {
+            logger->info(fmt, std::forward<Args>(args)...);
+        } else {
+            spdlog::info(fmt, std::forward<Args>(args)...);
+        }
     }
 } // namespace TJS
 
@@ -2697,32 +2715,23 @@ tjs_uint32 TVPGetCurrentShiftKeyState() {
 }
 
 ttstr TVPGetPlatformName() {
-    switch(cocos2d::Application::getInstance()->getTargetPlatform()) {
-        case ApplicationProtocol::Platform::OS_WINDOWS:
-            return "Win32";
-        case ApplicationProtocol::Platform::OS_LINUX:
-            return "Linux";
-        case ApplicationProtocol::Platform::OS_MAC:
-            return "MacOS";
-        case ApplicationProtocol::Platform::OS_ANDROID:
-            return "Android";
-        case ApplicationProtocol::Platform::OS_IPHONE:
-            return "iPhone";
-        case ApplicationProtocol::Platform::OS_IPAD:
-            return "iPad";
-        case ApplicationProtocol::Platform::OS_BLACKBERRY:
-            return "BlackBerry";
-        case ApplicationProtocol::Platform::OS_NACL:
-            return "Nacl";
-        case ApplicationProtocol::Platform::OS_TIZEN:
-            return "Tizen";
-        case ApplicationProtocol::Platform::OS_WINRT:
-            return "WinRT";
-        case ApplicationProtocol::Platform::OS_WP8:
-            return "WinPhone8";
-        default:
-            return "Unknown";
-    }
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_WIN32)
+    return "Win32";
+#elif (CC_TARGET_PLATFORM == CC_PLATFORM_LINUX)
+    return "Linux";
+#elif (CC_TARGET_PLATFORM == CC_PLATFORM_MAC)
+    return "MacOS";
+#elif (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID)
+    return "Android";
+#elif (CC_TARGET_PLATFORM == CC_PLATFORM_IOS)
+    return "iPhone";
+#elif (CC_TARGET_PLATFORM == CC_PLATFORM_WP8)
+    return "WinPhone8";
+#elif (CC_TARGET_PLATFORM == CC_PLATFORM_WINRT)
+    return "WinRT";
+#else
+    return "Unknown";
+#endif
 }
 
 ttstr TVPGetOSName() { return TVPGetPlatformName(); }

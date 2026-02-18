@@ -7,8 +7,13 @@
 #include <unordered_set>
 #include <mutex>
 #include <thread>
+#include <memory>
+
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/spdlog.h>
 
 #include "environ/Application.h"
+#include "environ/cocos2d/AppDelegate.h"
 #include "base/SysInitIntf.h"
 #include "base/impl/SysInitImpl.h"
 
@@ -39,6 +44,28 @@ thread_local std::string g_thread_error;
 engine_handle_t g_runtime_owner = nullptr;
 bool g_runtime_active = false;
 bool g_runtime_started_once = false;
+std::unique_ptr<TVPAppDelegate> g_host_app_delegate;
+bool g_cocos_bootstrapped = false;
+std::once_flag g_loggers_init_once;
+
+std::shared_ptr<spdlog::logger> EnsureNamedLogger(const char* name) {
+  if (auto logger = spdlog::get(name); logger != nullptr) {
+    return logger;
+  }
+  return spdlog::stdout_color_mt(name);
+}
+
+void EnsureRuntimeLoggersInitialized() {
+  std::call_once(g_loggers_init_once, []() {
+    spdlog::set_level(spdlog::level::debug);
+    auto core_logger = EnsureNamedLogger("core");
+    EnsureNamedLogger("tjs2");
+    EnsureNamedLogger("plugin");
+    if (core_logger != nullptr) {
+      spdlog::set_default_logger(core_logger);
+    }
+  });
+}
 
 void SetThreadError(const char* message) {
   g_thread_error = (message != nullptr) ? message : "";
@@ -93,6 +120,20 @@ void ClearHandleErrorLocked(engine_handle_s* impl) {
   impl->last_error.clear();
 }
 
+bool EnsureHostCocosRuntimeInitialized() {
+  if (g_cocos_bootstrapped) {
+    return true;
+  }
+  if (!g_host_app_delegate) {
+    g_host_app_delegate = std::make_unique<TVPAppDelegate>();
+  }
+  if (!g_host_app_delegate->bootstrapForHostRuntime()) {
+    return false;
+  }
+  g_cocos_bootstrapped = true;
+  return true;
+}
+
 }  // namespace
 
 extern "C" {
@@ -125,6 +166,9 @@ engine_result_t engine_create(const engine_create_desc_t* desc,
     return SetThreadErrorAndReturn(ENGINE_RESULT_NOT_SUPPORTED,
                                    "unsupported engine API major version");
   }
+
+  EnsureRuntimeLoggersInitialized();
+  TVPHostSuppressProcessExit = true;
 
   auto* impl = new (std::nothrow) engine_handle_s();
   if (impl == nullptr) {
@@ -254,8 +298,19 @@ engine_result_t engine_open_game(engine_handle_t handle,
   TVPTerminated = false;
   TVPTerminateCode = 0;
   TVPSystemUninitCalled = false;
+  TVPTerminateOnWindowClose = false;
+  TVPTerminateOnNoWindowStartup = false;
+  TVPHostSuppressProcessExit = true;
+
+  if (!EnsureHostCocosRuntimeInitialized()) {
+    return SetHandleErrorAndReturnLocked(
+        impl,
+        ENGINE_RESULT_INTERNAL_ERROR,
+        "failed to initialize cocos runtime for host mode");
+  }
 
   try {
+    EnsureRuntimeLoggersInitialized();
     Application->StartApplication(ttstr(game_root_path_utf8));
   } catch (...) {
     return SetHandleErrorAndReturnLocked(impl, ENGINE_RESULT_INTERNAL_ERROR,

@@ -18,6 +18,7 @@
 #include <cocos/platform/CCFileUtils.h>
 #include "StorageImpl.h"
 #include "BinaryStream.h"
+#include <spdlog/spdlog.h>
 
 tTJSHashTable<ttstr, TVPFontNamePathInfo, tTVPttstrHash> TVPFontNames;
 static ttstr TVPDefaultFontName;
@@ -216,16 +217,26 @@ void TVPInitFontNames() {
             break;
         if(TVPEnumFontsProc(TJS_W("file://./c/Windows/Fonts/simhei.ttf")))
             break;
+#elif defined(__APPLE__)
+        if(TVPEnumFontsProc(TJS_W("file://./System/Library/Fonts/PingFang.ttc")))
+            break;
+        if(TVPEnumFontsProc(
+               TJS_W("file://./System/Library/Fonts/Hiragino Sans GB.ttc")))
+            break;
+        if(TVPEnumFontsProc(
+               TJS_W("file://./System/Library/Fonts/Supplemental/Arial Unicode.ttf")))
+            break;
 #endif
 
         { // from internal storage
-            auto data = cocos2d::FileUtils::getInstance()->getDataFromFile(
-                "NotoSansCJK-Regular.ttc");
+            auto *fileUtils = cocos2d::FileUtils::getInstance();
+            auto data = fileUtils->getDataFromFile("NotoSansCJK-Regular.ttc");
             if(data.isNull()) {
-                spdlog::critical("can't found internal font file!");
-                exit(-1);
+                data = fileUtils->getDataFromFile("fonts/NotoSansCJK-Regular.ttc");
             }
-            if(TVPInternalEnumFonts(
+            if(data.isNull()) {
+                spdlog::warn("internal font file not found: NotoSansCJK-Regular.ttc");
+            } else if(TVPInternalEnumFonts(
                    data.getBytes(), data.getSize(), "NotoSansCJK-Regular.ttc",
                    [](TVPFontNamePathInfo *info) -> tTJSBinaryStream * {
                        auto data =

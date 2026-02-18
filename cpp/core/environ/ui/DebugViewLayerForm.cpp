@@ -28,9 +28,17 @@ public:
         _sprite->setAnchorPoint(Vec2::ZERO);
         addChild(_sprite);
         _name = Label::createWithTTF("", "NotoSansCJK-Regular.ttc", 16);
+        if(!_name)
+            _name = Label::createWithSystemFont("", "Helvetica", 16);
+        if(!_name)
+            _name = Label::create();
         _name->setAnchorPoint(Vec2::ZERO);
         addChild(_name);
         _memsize = Label::createWithTTF("", "NotoSansCJK-Regular.ttc", 16);
+        if(!_memsize)
+            _memsize = Label::createWithSystemFont("", "Helvetica", 16);
+        if(!_memsize)
+            _memsize = Label::create();
         _memsize->setAnchorPoint(Vec2(1, 0));
         addChild(_memsize);
         return true;
@@ -147,6 +155,10 @@ bool DebugViewLayerForm::init() {
     setOnExitCallback(std::bind(&DebugViewLayerForm::onExitCallback, this));
 
     _totalSize = Label::createWithTTF("", "NotoSansCJK-Regular.ttc", 16);
+    if(!_totalSize)
+        _totalSize = Label::createWithSystemFont("", "Helvetica", 16);
+    if(!_totalSize)
+        _totalSize = Label::create();
     _totalSize->setAnchorPoint(Vec2(1, 1));
 
     iTVPLayerManager *manager =

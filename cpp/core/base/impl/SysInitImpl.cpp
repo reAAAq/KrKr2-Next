@@ -382,6 +382,7 @@ bool TVPTerminated = false;
 bool TVPTerminateOnWindowClose = true;
 bool TVPTerminateOnNoWindowStartup = true;
 int TVPTerminateCode = 0;
+bool TVPHostSuppressProcessExit = false;
 
 //---------------------------------------------------------------------------
 void TVPTerminateAsync(int code) {

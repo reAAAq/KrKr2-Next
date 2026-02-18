@@ -4,7 +4,12 @@
 // extern bool initWindow(cocos2d::GLView*);
 
 class TVPAppDelegate : public cocos2d::Application {
+public:
+    // Bootstrap runtime for embedded hosts (e.g. Flutter FFI) without
+    // scheduling standalone startup UI.
+    bool bootstrapForHostRuntime();
 
+private:
     void initGLContextAttrs() override;
 
     /**

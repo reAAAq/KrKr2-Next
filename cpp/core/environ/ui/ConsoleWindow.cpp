@@ -44,6 +44,13 @@ void TVPConsoleWindow::visit(Renderer *renderer, const Mat4 &parentTransform,
                 dim.height = 0;
                 label = cocos2d::Label::createWithTTF(
                     "", "NotoSansCJK-Regular.ttc", _fontSize, dim);
+                if(!label) {
+                    label =
+                        cocos2d::Label::createWithSystemFont("", "Helvetica", _fontSize);
+                }
+                if(!label) {
+                    label = cocos2d::Label::create();
+                }
                 label->setAnchorPoint(Vec2::ZERO);
                 addChild(label);
             } else {

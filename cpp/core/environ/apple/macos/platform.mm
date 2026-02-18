@@ -27,6 +27,7 @@
 #include "StorageImpl.h"
 #include "EventIntf.h"
 #include "Platform.h"
+#include "SysInitImpl.h"
 #include "tjsString.h"
 
 //bool initWindow(cocos2d::GLView* glView) {
@@ -214,6 +215,11 @@ void TVPControlAdDialog(int, int, int) { /*pass*/ }
 void TVPExitApplication(int code) {
     // clear some static data for memory leak detect
     TVPDeliverCompactEvent(TVP_COMPACT_LEVEL_MAX);
+    TVPTerminated = true;
+    TVPTerminateCode = code;
+    if(TVPHostSuppressProcessExit) {
+        return;
+    }
     exit(code);
 }
 
@@ -454,4 +460,3 @@ bool TVP_utime(const char *name, time_t modtime) {
     mt[1].tv_usec = 0;
     return utimes(name, mt) == 0;
 }
-

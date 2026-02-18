@@ -29,6 +29,7 @@ extern bool TVPTerminated;
 extern bool TVPTerminateOnWindowClose;
 extern bool TVPTerminateOnNoWindowStartup;
 extern int TVPTerminateCode;
+extern bool TVPHostSuppressProcessExit;
 
 //---------------------------------------------------------------------------
 

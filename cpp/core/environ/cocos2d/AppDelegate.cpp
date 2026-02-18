@@ -18,21 +18,12 @@ bool TVPCheckStartupArg();
 
 std::string TVPGetCurrentLanguage();
 
-void TVPAppDelegate::applicationWillEnterForeground() {
-    ::Application->OnActivate();
-    cocos2d::Director::getInstance()->startAnimation();
-}
+namespace {
 
-void TVPAppDelegate::applicationDidEnterBackground() {
-    ::Application->OnDeactivate();
-    cocos2d::Director::getInstance()->stopAnimation();
-}
-
-bool TVPAppDelegate::applicationDidFinishLaunching() {
+bool SetupRuntime(bool scheduleStandaloneStartupUi) {
     SDL_SetMainReady();
     TVPMainThreadID = std::this_thread::get_id();
     spdlog::debug("App Finish Launching");
-    // initialize director
     auto director = cocos2d::Director::getInstance();
     auto glview = director->getOpenGLView();
     if(!glview) {
@@ -41,7 +32,6 @@ bool TVPAppDelegate::applicationDidFinishLaunching() {
 #if CC_TARGET_PLATFORM == CC_PLATFORM_WIN32
         HWND hwnd = glview->getWin32Window();
         if(hwnd) {
-            // 添加可调节边框和最大化按钮
             LONG style = GetWindowLong(hwnd, GWL_STYLE);
             style |= WS_THICKFRAME | WS_MAXIMIZEBOX;
             SetWindowLong(hwnd, GWL_STYLE, style);
@@ -51,7 +41,6 @@ bool TVPAppDelegate::applicationDidFinishLaunching() {
 
 #if (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID ||                              \
      CC_TARGET_PLATFORM == CC_PLATFORM_IOS)
-    // Set the design resolution
     cocos2d::Size screenSize = glview->getFrameSize();
     if(screenSize.width < screenSize.height) {
         std::swap(screenSize.width, screenSize.height);
@@ -66,47 +55,56 @@ bool TVPAppDelegate::applicationDidFinishLaunching() {
 #endif
 
     std::vector<std::string> searchPath;
-
-    // In this demo, we select resource according to the frame's
-    // height. If the resource size is different from design
-    // resolution size, you need to set contentScaleFactor. We use the
-    // ratio of resource's height to the height of design resolution,
-    // this can make sure that the resource's height could fit for the
-    // height of design resolution.
     searchPath.emplace_back("res");
-
-    // set searching path
     cocos2d::FileUtils::getInstance()->setSearchPaths(searchPath);
 
-    // turn on display FPS
     director->setDisplayStats(false);
-
-    // set FPS. the default value is 1.0/60 if you don't call this
     director->setAnimationInterval(1.0f / 60);
 
     TVPInitUIExtension();
-
-    // initialize something
     LocaleConfigManager::GetInstance()->Initialize(TVPGetCurrentLanguage());
-    // create a scene. it's an autorelease object
-    TVPMainScene *scene = TVPMainScene::CreateInstance();
 
-    // run
-    director->runWithScene(scene);
+    auto *scene = TVPMainScene::GetInstance();
+    if(scene == nullptr) {
+        scene = TVPMainScene::CreateInstance();
+    }
+    if(director->getRunningScene() == nullptr) {
+        director->runWithScene(scene);
+    }
 
-    scene->scheduleOnce(
-        [](float dt) {
-            TVPMainScene::GetInstance()->unschedule("launch");
-            TVPGlobalPreferenceForm::Initialize();
-            if(!TVPCheckStartupArg()) {
-                TVPMainScene::GetInstance()->pushUIForm(
-                    TVPMainFileSelectorForm::create());
-            }
-        },
-        0, "launch");
+    if(scheduleStandaloneStartupUi && scene != nullptr) {
+        scene->scheduleOnce(
+            [](float dt) {
+                TVPMainScene::GetInstance()->unschedule("launch");
+                TVPGlobalPreferenceForm::Initialize();
+                if(!TVPCheckStartupArg()) {
+                    TVPMainScene::GetInstance()->pushUIForm(
+                        TVPMainFileSelectorForm::create());
+                }
+            },
+            0, "launch");
+    }
 
     return true;
 }
+
+} // namespace
+
+void TVPAppDelegate::applicationWillEnterForeground() {
+    ::Application->OnActivate();
+    cocos2d::Director::getInstance()->startAnimation();
+}
+
+void TVPAppDelegate::applicationDidEnterBackground() {
+    ::Application->OnDeactivate();
+    cocos2d::Director::getInstance()->stopAnimation();
+}
+
+bool TVPAppDelegate::applicationDidFinishLaunching() {
+    return SetupRuntime(true);
+}
+
+bool TVPAppDelegate::bootstrapForHostRuntime() { return SetupRuntime(false); }
 
 void TVPAppDelegate::initGLContextAttrs() {
     GLContextAttrs glContextAttrs = { 8, 8, 8, 8, 24, 8 };

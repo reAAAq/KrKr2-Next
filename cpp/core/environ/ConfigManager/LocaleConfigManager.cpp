@@ -8,15 +8,21 @@
 LocaleConfigManager::LocaleConfigManager() = default;
 
 std::string LocaleConfigManager::GetFilePath() {
-    std::string pathprefix = "locale/"; // constant file in app package
-    std::string fullpath =
-        pathprefix + currentLangCode + ".xml"; // exp. "local/en_us.xml"
-    if(!cocos2d::FileUtils::getInstance()->isFileExist(fullpath)) {
-        currentLangCode =
-            "en_us"; // restore to default language config(must exist)
-        return GetFilePath();
+    constexpr const char *kPathPrefix = "locale/";
+    const std::string requested = std::string(kPathPrefix) + currentLangCode + ".xml";
+    if(cocos2d::FileUtils::getInstance()->isFileExist(requested)) {
+        return cocos2d::FileUtils::getInstance()->fullPathForFilename(requested);
     }
-    return cocos2d::FileUtils::getInstance()->fullPathForFilename(fullpath);
+
+    // Fallback to default locale once. If still missing, return empty path
+    // to avoid recursive lookup and let callers safely degrade.
+    const std::string fallback = std::string(kPathPrefix) + "en_us.xml";
+    if(cocos2d::FileUtils::getInstance()->isFileExist(fallback)) {
+        currentLangCode = "en_us";
+        return cocos2d::FileUtils::getInstance()->fullPathForFilename(fallback);
+    }
+
+    return "";
 }
 
 LocaleConfigManager *LocaleConfigManager::GetInstance() {
@@ -40,9 +46,17 @@ void LocaleConfigManager::Initialize(const std::string &sysLang) {
     if(currentLangCode.empty())
         currentLangCode = sysLang;
     AllConfig.clear();
+    AllConfig.reserve(128);
     tinyxml2::XMLDocument doc;
-    std::string xmlData =
-        cocos2d::FileUtils::getInstance()->getStringFromFile(GetFilePath());
+    const std::string filePath = GetFilePath();
+    if(filePath.empty()) {
+        // Keep map empty and fall back to key-as-text in GetText().
+        return;
+    }
+    std::string xmlData = cocos2d::FileUtils::getInstance()->getStringFromFile(filePath);
+    if(xmlData.empty()) {
+        return;
+    }
     bool _writeBOM = false;
     const char *p = xmlData.c_str();
     p = tinyxml2::XMLUtil::ReadBOM(p, &_writeBOM);
