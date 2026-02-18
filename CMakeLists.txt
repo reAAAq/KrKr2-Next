@@ -29,6 +29,7 @@ project(${APP_NAME})
 
 option(ENABLE_TESTS "enable tests execute build(exclude android)" ON)
 option(BUILD_TOOLS "build tools execute build(exclude android ios)" ON)
+option(BUILD_ENGINE_API "build engine_api bridge shared library" ON)
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 17)
@@ -91,6 +92,9 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/cpp/external)
 # build library
 add_subdirectory(${KRKR2CORE_PATH})
 add_subdirectory(${KRKR2PLUGIN_PATH})
+if(BUILD_ENGINE_API)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/bridge/engine_api)
+endif()
 
 target_link_libraries(${PROJECT_NAME} PUBLIC
     krkr2plugin krkr2core
