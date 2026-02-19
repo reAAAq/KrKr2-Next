@@ -11,11 +11,11 @@ class iTVPSoundBuffer;
 
 class TVPYUVSprite;
 
-namespace cocos2d {
-    class Sprite;
-
-    class Node;
-} // namespace cocos2d
+// [ANGLE Migration] Forward-declare a generic node pointer.
+// In the original code these were cocos2d::Sprite/Node; now they are
+// opaque pointers that will be wired up via the Flutter rendering path.
+// The movie overlay display will be re-implemented in Phase 4.
+using OverlayNode = void;
 
 NS_KRMOVIE_BEGIN
 #define MAX_BUFFER_COUNT 4
@@ -222,11 +222,10 @@ protected:
     double m_curpts = 0;
 };
 
-class VideoPresentOverlay : public TVPMoviePlayer // cocos2d compatible video
-                                                  // display overlay
+class VideoPresentOverlay : public TVPMoviePlayer // video display overlay
 {
 protected:
-    cocos2d::Node *m_pRootNode = nullptr;
+    OverlayNode *m_pRootNode = nullptr;
     TVPYUVSprite *m_pSprite = nullptr;
 
     ~VideoPresentOverlay() override;
@@ -276,9 +275,9 @@ public:
 
     BasePlayer *GetPlayer() { return m_pPlayer; }
 
-    void SetRootNode(cocos2d::Node *node);
+    void SetRootNode(OverlayNode *node);
 
-    cocos2d::Node *GetRootNode() { return m_pRootNode; }
+    OverlayNode *GetRootNode() { return m_pRootNode; }
 
     static VideoPresentOverlay2 *create();
 };

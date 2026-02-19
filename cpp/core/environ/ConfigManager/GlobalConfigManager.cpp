@@ -1,5 +1,5 @@
 #include "GlobalConfigManager.h"
-#include "tinyxml2/tinyxml2.h"
+#include <tinyxml2.h>
 #include "Platform.h"
 #include "UtilStreams.h"
 #include "LocaleConfigManager.h"

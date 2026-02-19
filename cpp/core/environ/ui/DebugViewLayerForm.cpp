@@ -2,7 +2,7 @@
 #include "extensions/GUI/CCScrollView/CCTableView.h"
 #include "WindowIntf.h"
 #include "DrawDevice.h"
-#include "cocos2d/MainScene.h"
+#include "MainScene.h"
 #include <ui/UIButton.h>
 #include <2d/CCSprite.h>
 #include <2d/CCLabel.h>

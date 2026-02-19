@@ -1,12 +1,10 @@
 #include <memory>
-#include <cocos2d.h>
 
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
-#include "environ/cocos2d/AppDelegate.h"
-
-USING_NS_CC;
+#include "environ/EngineBootstrap.h"
+#include "environ/Application.h"
 
 int main(int argc, char *argv[]) {
     spdlog::set_level(spdlog::level::debug);
@@ -17,7 +15,18 @@ int main(int argc, char *argv[]) {
 
     spdlog::set_default_logger(core_logger);
 
-    static std::unique_ptr<TVPAppDelegate> pAppDelegate =
-        std::make_unique<TVPAppDelegate>();
-    return pAppDelegate->run();
+    // Initialize the engine with a default 960x640 surface
+    if (!TVPEngineBootstrap::Initialize(960, 640)) {
+        spdlog::error("Failed to initialize engine bootstrap");
+        return 1;
+    }
+
+    // Run the application main loop
+    extern class tTVPApplication *Application;
+    if (Application) {
+        Application->Run();
+    }
+
+    TVPEngineBootstrap::Shutdown();
+    return 0;
 }

@@ -1,5 +1,5 @@
 #include "GameMainMenu.h"
-#include "cocos2d/MainScene.h"
+#include "MainScene.h"
 #include "Application.h"
 #include "WindowIntf.h"
 #include "ui/UIHelper.h"

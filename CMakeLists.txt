@@ -84,8 +84,6 @@ elseif(MACOS)
     )
 endif()
 
-target_include_directories(${PROJECT_NAME} PUBLIC ${KRKR2CORE_PATH}/environ/cocos2d)
-
 # external lib
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/cpp/external)
 
@@ -100,40 +98,13 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     krkr2plugin krkr2core
 )
 
-## resources
-if(NOT ANDROID)
-    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/CocosBuildHelpers.cmake")
-
-    set(GAME_RES_FOLDER "${CMAKE_CURRENT_SOURCE_DIR}/ui/cocos-studio")
-
-    if(WINDOWS OR APPLE)
-        cocos_mark_multi_resources(common_res_files RES_TO "Resources" FOLDERS ${GAME_RES_FOLDER})
-    endif()
-
-    # mark app resources
-    setup_cocos_app_config(${APP_NAME})
-
-    if(APPLE)
-        set_target_properties(${APP_NAME} PROPERTIES RESOURCE "${APP_UI_RES}")
-        target_sources(${APP_NAME} PRIVATE ${common_res_files})
-        if(MACOSX)
-            set_target_properties(${APP_NAME} PROPERTIES
-                    MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/apple/macos/Info.plist"
-            )
-        elseif(IOS)
-#            cocos_pak_xcode(${APP_NAME} INFO_PLIST "iOSBundleInfo.plist.in")
-#            set_xcode_property(${APP_NAME} ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon")
-#            set_xcode_property(${APP_NAME} DEVELOPMENT_TEAM "")
-#            set_xcode_property(${APP_NAME} CODE_SIGN_IDENTITY "iPhone Developer")
-        endif()
-    elseif(WINDOWS)
-        target_sources(${PROJECT_NAME} PRIVATE ${common_res_files})
-        cocos_copy_target_dll(${APP_NAME})
-    endif()
-
-    if(LINUX OR WINDOWS)
-        cocos_get_resource_path(APP_RES_DIR ${APP_NAME})
-        cocos_copy_target_res(${APP_NAME} LINK_TO ${APP_RES_DIR} FOLDERS ${GAME_RES_FOLDER})
+## app config
+if(APPLE)
+    set_target_properties(${APP_NAME} PROPERTIES RESOURCE "${APP_UI_RES}")
+    if(MACOSX)
+        set_target_properties(${APP_NAME} PROPERTIES
+                MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/platforms/apple/macos/Info.plist"
+        )
     endif()
 endif()
 

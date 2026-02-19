@@ -26,7 +26,8 @@
       "default-features": false,
       "platform": "!android & !ios"
     },
-    "cocos2dx",
+    "minizip",
+    "tinyxml2",
     {
       "name": "angle",
       "default-features": false,

@@ -313,9 +313,9 @@ enum {
     orientLandscape,
 };
 
-namespace cocos2d {
-    class Node;
-}
+// [ANGLE Migration] cocos2d::Node replaced with opaque pointer.
+// The scene-tree based rendering is removed; Flutter handles display.
+using TVPOverlayNode = void;
 
 class iWindowLayer {
 protected:
@@ -375,7 +375,7 @@ public:
     virtual void ResetTouchVelocity(tjs_int id) = 0;
     virtual bool GetMouseVelocity(float &x, float &y, float &speed) const = 0;
     virtual void TickBeat() = 0;
-    virtual cocos2d::Node *GetPrimaryArea() = 0;
+    virtual TVPOverlayNode *GetPrimaryArea() = 0;
 
     void SetZoomNumer(tjs_int n) { SetZoom(n, ZoomDenom); }
     [[nodiscard]] tjs_int GetZoomNumer() const { return ZoomNumer; }

@@ -7,7 +7,7 @@
 #include "ui/UIButton.h"
 #include "ui/UIText.h"
 #include "ui/UISlider.h"
-#include "cocos2d/MainScene.h"
+#include "MainScene.h"
 #include "cocos/ui/UIHelper.h"
 #include "ffmpeg/KRMoviePlayer.h"
 #include "StorageImpl.h"

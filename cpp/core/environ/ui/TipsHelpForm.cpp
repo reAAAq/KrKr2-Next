@@ -1,7 +1,7 @@
 #include "TipsHelpForm.h"
 #include "ui/UIHelper.h"
 #include "ui/UIListView.h"
-#include "cocos2d/MainScene.h"
+#include "MainScene.h"
 #include "csd/CsdUIFactory.h"
 
 using namespace cocos2d;

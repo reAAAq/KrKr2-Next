@@ -1,5 +1,5 @@
 #include "ConsoleWindow.h"
-#include "cocos2d/MainScene.h"
+#include "MainScene.h"
 
 using namespace cocos2d;
 

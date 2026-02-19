@@ -15,7 +15,8 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-#include <cocos/platform/CCFileUtils.h>
+#include <fstream>
+#include <vector>
 #include "StorageImpl.h"
 #include "BinaryStream.h"
 #include <spdlog/spdlog.h>
@@ -229,21 +230,31 @@ void TVPInitFontNames() {
 #endif
 
         { // from internal storage
-            auto *fileUtils = cocos2d::FileUtils::getInstance();
-            auto data = fileUtils->getDataFromFile("NotoSansCJK-Regular.ttc");
-            if(data.isNull()) {
-                data = fileUtils->getDataFromFile("fonts/NotoSansCJK-Regular.ttc");
+            // Read font file using standard file I/O (replaces cocos2d::FileUtils)
+            auto tryReadFont = [](const std::string &path) -> std::vector<uint8_t> {
+                std::ifstream ifs(path, std::ios::binary | std::ios::ate);
+                if (!ifs.is_open()) return {};
+                auto size = ifs.tellg();
+                if (size <= 0) return {};
+                std::vector<uint8_t> data(static_cast<size_t>(size));
+                ifs.seekg(0);
+                ifs.read(reinterpret_cast<char*>(data.data()), size);
+                return data;
+            };
+
+            auto data = tryReadFont("NotoSansCJK-Regular.ttc");
+            if (data.empty()) {
+                data = tryReadFont("fonts/NotoSansCJK-Regular.ttc");
             }
-            if(data.isNull()) {
+            if (data.empty()) {
                 spdlog::warn("internal font file not found: NotoSansCJK-Regular.ttc");
             } else if(TVPInternalEnumFonts(
-                   data.getBytes(), data.getSize(), "NotoSansCJK-Regular.ttc",
-                   [](TVPFontNamePathInfo *info) -> tTJSBinaryStream * {
-                       auto data =
-                           cocos2d::FileUtils::getInstance()->getDataFromFile(
-                               info->Path.AsStdString());
+                   data.data(), data.size(), "NotoSansCJK-Regular.ttc",
+                   [&tryReadFont](TVPFontNamePathInfo *info) -> tTJSBinaryStream * {
+                       auto fdata = tryReadFont(info->Path.AsStdString());
+                       if (fdata.empty()) return nullptr;
                        auto *ret = new tTVPMemoryStream();
-                       ret->WriteBuffer(data.getBytes(), data.getSize());
+                       ret->WriteBuffer(fdata.data(), fdata.size());
                        ret->SetPosition(0);
                        return ret;
                    }))

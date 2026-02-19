@@ -1,12 +1,10 @@
-#include <ioapi.h>
+#include <minizip/ioapi.h>
 #include <minizip/zip.h>
-#include <cocos/base/base64.h>
+#include <spdlog/spdlog.h>
 #include <sstream>
 #include <iomanip>
 #include <condition_variable>
 #include <map>
-#include <cocos/network/HttpRequest.h>
-#include <cocos/network/HttpClient.h>
 #include "Platform.h"
 #include "ConfigManager/LocaleConfigManager.h"
 #include "StorageImpl.h"
@@ -29,14 +27,14 @@ struct zlib_inmem_func64 : public zlib_filefunc64_def {
         return str;
     }
 
-    static uint32_t ZCALLBACK fread_file_func(voidpf opaque, voidpf stream,
-                                              void *buf, uint32_t size) {
+    static uLong ZCALLBACK fread_file_func(voidpf opaque, voidpf stream,
+                                            void *buf, uLong size) {
         tTVPMemoryStream *str = (tTVPMemoryStream *)stream;
         return str->Read(buf, size);
     }
 
-    static uint32_t ZCALLBACK fwrite_file_func(voidpf opaque, voidpf stream,
-                                               const void *buf, uint32_t size) {
+    static uLong ZCALLBACK fwrite_file_func(voidpf opaque, voidpf stream,
+                                             const void *buf, uLong size) {
         tTVPMemoryStream *str = (tTVPMemoryStream *)stream;
         return str->Write(buf, size);
     }
@@ -133,97 +131,14 @@ uint32_t convert_to_dos_date(const struct tm *time) {
 #define FLAG_UTF8 (1 << 11)
 static void SendDumps(std::string dumpdir, std::vector<std::string> allDumps,
                       std::string packageName, std::string versionStr) {
-    std::mutex _mutex;
-    std::condition_variable _cond;
-    for(const std::string &filename : allDumps) {
+    // [ANGLE Migration] Cocos2d-x HttpClient removed.
+    // Dump upload will be re-implemented via platform-native HTTP or Flutter channel.
+    spdlog::warn("SendDumps: HTTP upload is currently disabled (cocos2d HttpClient removed).");
+    spdlog::warn("SendDumps: {} dump file(s) will be deleted without uploading.", allDumps.size());
+    for (const std::string &filename : allDumps) {
         std::string fullpath = dumpdir + "/" + filename;
-        do {
-            struct tTVP_stat stat_buf;
-            if(!TVP_stat(fullpath.c_str(), stat_buf)) {
-                break;
-            }
-
-            FILE *fp = fopen(fullpath.c_str(), "rb");
-            if(!fp) {
-                break;
-            }
-            std::vector<unsigned char> buf;
-            buf.resize(stat_buf.st_size);
-            fseek(fp, 0, SEEK_SET);
-            fread(&buf[0], 1, stat_buf.st_size, fp);
-            fclose(fp);
-
-            zip_fileinfo zi;
-            memset(&zi, 0, sizeof zi);
-
-            time_t _t = stat_buf.st_mtime;
-            struct tm *time = localtime(&_t);
-            zi.dos_date = convert_to_dos_date(time);
-
-            // CRCÓ‹Ëã
-            unsigned long crcFile = 0;
-            crcFile = crc32(crcFile, (const Bytef *)&buf[0], buf.size());
-            // ¥Õ¥¡¥¤¥ë¤Î×·¼Ó
-            // UTF8¤Ç¸ñ¼{¤¹¤ë
-            zipFile zf = zipOpen2_64((const void *)filename.c_str(), 0, nullptr,
-                                     GetZlibIOFunc());
-            if(zf == nullptr) {
-                break;
-            }
-            if(zipOpenNewFileInZip4(zf, filename.c_str(), &zi, nullptr, 0,
-                                    nullptr, 0, nullptr /* comment*/,
-                                    Z_DEFLATED, 9, 0, -MAX_WBITS, DEF_MEM_LEVEL,
-                                    Z_DEFAULT_STRATEGY, nullptr, crcFile, 0,
-                                    FLAG_UTF8) != ZIP_OK) {
-                zipClose(zf, nullptr);
-                break;
-            }
-            zipWriteInFileInZip(zf, (const Bytef *)&buf[0], buf.size());
-            zipCloseFileInZip(zf);
-            zipClose(zf, nullptr);
-
-            cocos2d::network::HttpRequest *pRequest =
-                new cocos2d::network::HttpRequest();
-            std::string strUrl =
-#ifdef _DEBUG
-                "http://127.0.0.1:7777/upload_dump.php"
-#else
-                "http://avgfun.net/upload_dump.php"
-#endif
-                ;
-            pRequest->setUrl(strUrl.c_str());
-            pRequest->setRequestType(cocos2d::network::HttpRequest::Type::POST);
-            std::ostringstream postData;
-            postData << "appid=" << url_encode(packageName);
-            postData << "&version=" << url_encode(versionStr);
-            postData << "&time=" << _t;
-            tTVPMemoryStream *bs = _inmemFiles.begin()->second;
-            char *base64str;
-            cocos2d::base64Encode(
-                (const unsigned char *)bs->GetInternalBuffer(), bs->GetSize(),
-                &base64str);
-            postData << "&data=" << url_encode(base64str);
-            free(base64str);
-            std::string postStr = postData.str();
-            pRequest->setRequestData(postStr.c_str(), postStr.length());
-            pRequest->setResponseCallback(
-                [&](cocos2d::network::HttpClient *client,
-                    cocos2d::network::HttpResponse *response) {
-                    _cond.notify_one();
-                });
-            pRequest->setTag("POST");
-            std::unique_lock<std::mutex> lk(_mutex);
-            cocos2d::network::HttpClient::getInstance()->send(pRequest);
-            _cond.wait(lk);
-            pRequest->release();
-        } while(false);
         remove(fullpath.c_str());
-        for(auto it : _inmemFiles) {
-            delete it.second;
-        }
-        _inmemFiles.clear();
     }
-    // allDumps.clear();
 }
 
 void TVPCheckAndSendDumps(const std::string &dumpdir,

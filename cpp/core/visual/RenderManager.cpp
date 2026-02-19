@@ -23,7 +23,50 @@ extern "C" {
 #include "Application.h"
 #include "Platform.h"
 #include "ConfigManager/IndividualConfigManager.h"
-#include "xxhash/xxhash.h"
+
+// Inline XXH32 implementation to avoid symbol conflicts with ANGLE's
+// built-in xxhash. Only XXH32() is used in this file.
+namespace {
+static inline uint32_t XXH32_round(uint32_t acc, uint32_t input) {
+    acc += input * 0x85EBCA77U;
+    acc = (acc << 13) | (acc >> 19);
+    acc *= 0x9E3779B1U;
+    return acc;
+}
+static inline uint32_t XXH32_avalanche(uint32_t h32) {
+    h32 ^= h32 >> 15; h32 *= 0x85EBCA77U;
+    h32 ^= h32 >> 13; h32 *= 0xC2B2AE3DU;
+    h32 ^= h32 >> 16;
+    return h32;
+}
+static uint32_t XXH32(const void* input, size_t len, uint32_t seed) {
+    const uint8_t* p = (const uint8_t*)input;
+    const uint8_t* end = p + len;
+    uint32_t h32;
+    if (len >= 16) {
+        const uint8_t* limit = end - 15;
+        uint32_t v1 = seed + 0x9E3779B1U + 0x85EBCA77U;
+        uint32_t v2 = seed + 0x85EBCA77U;
+        uint32_t v3 = seed + 0;
+        uint32_t v4 = seed - 0x9E3779B1U;
+        do {
+            uint32_t k; memcpy(&k, p, 4); v1 = XXH32_round(v1, k); p += 4;
+            memcpy(&k, p, 4); v2 = XXH32_round(v2, k); p += 4;
+            memcpy(&k, p, 4); v3 = XXH32_round(v3, k); p += 4;
+            memcpy(&k, p, 4); v4 = XXH32_round(v4, k); p += 4;
+        } while (p < limit);
+        h32 = ((v1 << 1) | (v1 >> 31)) + ((v2 << 7) | (v2 >> 25))
+            + ((v3 << 12) | (v3 >> 20)) + ((v4 << 18) | (v4 >> 14));
+    } else {
+        h32 = seed + 0x165667B1U;
+    }
+    h32 += (uint32_t)len;
+    while (p + 4 <= end) { uint32_t k; memcpy(&k, p, 4); h32 += k * 0xC2B2AE3DU; h32 = ((h32 << 17) | (h32 >> 15)) * 0x27D4EB2FU; p += 4; }
+    while (p < end) { h32 += (*p++) * 0x165667B1U; h32 = ((h32 << 11) | (h32 >> 21)) * 0x9E3779B1U; }
+    return XXH32_avalanche(h32);
+}
+} // anonymous namespace
+
 #include "tjsHashSearch.h"
 #include "EventIntf.h"
 #include "lz4.h"

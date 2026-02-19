@@ -3,7 +3,7 @@
 #include "cocostudio/ActionTimeline/CSLoader.h"
 #include "Application.h"
 #include "ui/UIWidget.h"
-#include "cocos2d/MainScene.h"
+#include "MainScene.h"
 #include "ui/UIHelper.h"
 #include "ui/UIText.h"
 #include "ui/UIButton.h"

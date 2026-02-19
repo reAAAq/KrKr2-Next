@@ -56,21 +56,11 @@ if(ANDROID)
     )
 endif()
 
-# cocos2dx
-find_package(cocos2dx CONFIG REQUIRED)
-
-## Link libraries
-target_link_libraries(${PROJECT_NAME} INTERFACE
-    # cocos2d
-    cocos2dx::cocos2d
-    $<$<BOOL:${ANDROID}>:$<LINK_LIBRARY:WHOLE_ARCHIVE,cocos2dx::cpp_android_spec>>
-)
-
-# Resolve duplicate symbol conflict between ANGLE (xxhash) and cocos2d-x (ext_xxhash).
-# Both libraries embed xxhash; on Apple platforms the new ld (ld-prime) refuses
-# duplicate symbols. Use -ld_classic to fall back to the classic linker behavior
-# that silently picks one. This workaround is temporary — when cocos2d-x is fully
-# removed in Phase 5 the conflict disappears.
-if(APPLE)
-    target_link_options(${PROJECT_NAME} INTERFACE "LINKER:-ld_classic")
+# ANGLE — KRKR_USE_ANGLE compile definition propagated to all modules
+if(NOT ANDROID)
+    find_package(unofficial-angle CONFIG QUIET)
+    if(unofficial-angle_FOUND)
+        target_compile_definitions(${PROJECT_NAME} INTERFACE KRKR_USE_ANGLE=1)
+        message(STATUS "ANGLE found — KRKR_USE_ANGLE=1 propagated to all modules")
+    endif()
 endif()

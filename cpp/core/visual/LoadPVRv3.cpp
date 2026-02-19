@@ -1,4 +1,4 @@
-#include <cocos/base/pvr.h>
+#include "ogl/PVRTDecompress.h"
 #include "tjsCommHead.h"
 #include "GraphicsLoaderIntf.h"
 #include "tjsDictionary.h"

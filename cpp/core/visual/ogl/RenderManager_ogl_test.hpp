@@ -82,7 +82,7 @@ static void CheckTestData(const char *funcname) {
                  3 ||
              ((std::abs(linetex[i * 4 + 2] - linecmp[i * 4 + 2]) * a1) >> 8) >
                  3))) {
-            cocos2d::log("%s check fail", funcname);
+            spdlog::error("{} check fail", funcname);
             for(int j = 0; j < 256 * 256 * 4; ++j) {
                 linecmp[j] = std::abs(linetex[j] - linecmp[j]);
             }
@@ -90,7 +90,7 @@ static void CheckTestData(const char *funcname) {
             return;
         }
     }
-    cocos2d::log("%s pass", funcname);
+    spdlog::info("{} pass", funcname);
 }
 
 static void _TEST_IGNORE_ALPHA() {

@@ -4,7 +4,7 @@ extern "C" {
 #include "libswscale/swscale.h"
 }
 
-#include <cocos2d.h>
+#include <spdlog/spdlog.h>
 #include "KRMoviePlayer.h"
 #include "VideoCodec.h"
 #include "CodecUtils.h"
@@ -12,7 +12,7 @@ extern "C" {
 #include "WaveMixer.h"
 #include "WindowImpl.h"
 #include "VideoOvlImpl.h"
-#include "cocos2d/YUVSprite.h"
+// [ANGLE Migration] YUVSprite removed — video overlay will use Flutter rendering.
 
 extern std::thread::id TVPMainThreadID;
 
@@ -230,33 +230,24 @@ int TVPMoviePlayer::AddVideoPicture(DVDVideoPicture &pic, int index) {
 VideoPresentOverlay::~VideoPresentOverlay() { ClearNode(); }
 
 void VideoPresentOverlay::ClearNode() {
-    if(m_pRootNode) {
-        m_pRootNode->removeFromParent(), m_pRootNode = nullptr;
-        m_pSprite = nullptr;
-    }
+    // [ANGLE Migration] Cocos2d-x Node::removeFromParent removed.
+    // In the new architecture, overlay lifecycle is managed by Flutter.
+    m_pRootNode = nullptr;
+    m_pSprite = nullptr;
 }
 
+// Replace VideoPresentOverlay::PresentPicture with stub
 void VideoPresentOverlay::PresentPicture(float dt) {
     BitmapPicture pic;
-    if(!m_usedPicture) {
-        return;
-    } else {
-        std::lock_guard<std::mutex> lk(m_mtxPicture);
-        BitmapPicture &picbuf = m_picture[m_curPicture];
-        // check pts
-        if(m_curpts == 0.0) {
-            m_curpts = picbuf.pts;
-        } else {
-            m_curpts += dt;
-            if(picbuf.pts > m_curpts) { // present in future
-                return;
-            }
-        }
-        do { // skip frame
-            pic.Clear();
+    {
+        std::unique_lock<std::mutex> lk(m_mtxPicture);
+        if(m_usedPicture <= 0)
+            return;
+        do {
             m_picture[m_curPicture].swap(pic);
-            m_curPicture = (m_curPicture + 1) & (MAX_BUFFER_COUNT - 1);
             --m_usedPicture;
+            if(++m_curPicture >= MAX_BUFFER_COUNT)
+                m_curPicture = 0;
         } while(m_usedPicture > 0 && m_curpts >= m_picture[m_curPicture].pts);
         assert(m_usedPicture >= 0);
         m_condPicture.notify_all();
@@ -265,44 +256,18 @@ void VideoPresentOverlay::PresentPicture(float dt) {
     if(!pic.rgba) {
         return;
     }
-    if(!Visible) {
-        m_pRootNode->setVisible(false);
-        return;
-    } else {
-        m_pRootNode->setVisible(true);
-    }
-    if(!m_pSprite) {
-        m_pSprite = TVPYUVSprite::create();
-        m_pSprite->setAnchorPoint(cocos2d::Vec2(0, 1));
-        m_pRootNode->addChild(m_pSprite);
-    }
-    cocos2d::Size videoSize(pic.width, pic.height);
-    m_pSprite->updateTextureData(pic.data[0], pic.width, pic.height,
-                                 pic.data[1], pic.width / 2, pic.height / 2,
-                                 pic.data[2], pic.width / 2, pic.height / 2);
-    const tTVPRect &rc = GetBounds();
-    float scaleX = rc.get_width() / videoSize.width;
-    float scaleY = rc.get_height() / videoSize.height;
-    if(scaleX != m_pSprite->getScaleX())
-        m_pSprite->setScaleX(scaleX);
-    if(scaleY != m_pSprite->getScaleY())
-        m_pSprite->setScaleY(scaleY);
-    cocos2d::Vec2 pos = m_pSprite->getPosition();
-    int top = m_pRootNode->getParent()->getContentSize().height - rc.top;
-    if((int)pos.x != rc.left || (int)pos.y != top) {
-        m_pSprite->setPosition(rc.left, top);
-    }
+    // [ANGLE Migration] Cocos2d-x YUVSprite rendering removed.
+    // Video frames are decoded but display overlay is not rendered.
+    // This will be re-implemented via Flutter texture sharing in Phase 4.
 }
 
 void KRMovie::VideoPresentOverlay::Play() {
-    if(m_pSprite)
-        m_pSprite->setVisible(true);
+    // [ANGLE Migration] m_pSprite->setVisible removed (TVPYUVSprite no longer available)
     TVPMoviePlayer::Play();
 }
 
 void KRMovie::VideoPresentOverlay::Stop() {
-    if(m_pSprite)
-        m_pSprite->setVisible(false);
+    // [ANGLE Migration] m_pSprite->setVisible removed (TVPYUVSprite no longer available)
     TVPMoviePlayer::Stop();
 }
 
@@ -312,19 +277,14 @@ MoviePlayerOverlay::~MoviePlayerOverlay() {
     m_pPlayer = nullptr;
 }
 
+// Replace MoviePlayerOverlay::SetWindow with stub
 void MoviePlayerOverlay::SetWindow(tTJSNI_Window *window) {
     ClearNode();
     m_pOwnerWindow = window;
-    cocos2d::Node *parent = m_pOwnerWindow->GetForm()->GetPrimaryArea();
-    parent->addChild((m_pRootNode = cocos2d::Node::create()));
-    m_pRootNode->setContentSize(cocos2d::Size::ZERO);
-    const static std::string sckey("update video");
-    m_pRootNode->schedule(
-        [this](float dt) {
-            PresentPicture(dt);
-            //		m_renderManager.Render();
-        },
-        sckey);
+    // [ANGLE Migration] Cocos2d-x Node::create / addChild / schedule removed.
+    // Video overlay will be connected via Flutter rendering path in Phase 4.
+    spdlog::warn("MoviePlayerOverlay::SetWindow: video overlay display is "
+                 "currently disabled (cocos2d scene tree removed)");
 }
 
 void MoviePlayerOverlay::BuildGraph(tTJSNI_VideoOverlay *callbackwin,
@@ -344,9 +304,7 @@ const tTVPRect &MoviePlayerOverlay::GetBounds() {
 
 void KRMovie::MoviePlayerOverlay::SetVisible(bool b) {
     VideoPresentOverlay::SetVisible(b);
-    if(m_pRootNode) {
-        m_pRootNode->setVisible(b);
-    }
+    // [ANGLE Migration] m_pRootNode->setVisible removed (OverlayNode is void*)
 }
 
 void MoviePlayerOverlay::OnPlayEvent(KRMovieEvent msg, void *p) {
@@ -370,7 +328,7 @@ void TVPMoviePlayer::BitmapPicture::Clear() {
             TJSAlignedDealloc(data[i]), data[i] = nullptr;
 }
 
-void VideoPresentOverlay2::SetRootNode(cocos2d::Node *node) {
+void VideoPresentOverlay2::SetRootNode(OverlayNode *node) {
     ClearNode();
     m_pRootNode = node;
 }

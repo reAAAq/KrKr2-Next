@@ -2,7 +2,7 @@
 
 #include <utility>
 #include "StorageImpl.h"
-#include "cocos2d/MainScene.h"
+#include "MainScene.h"
 #include "PreferenceForm.h"
 #include "ConfigManager/LocaleConfigManager.h"
 #include "XP3ArchiveRepack.h"

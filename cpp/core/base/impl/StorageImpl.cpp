@@ -14,8 +14,6 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <sys/stat.h>
-#include <cocos/cocos2d.h>
-
 #include "MsgIntf.h"
 
 #include "StorageImpl.h"

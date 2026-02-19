@@ -5,7 +5,7 @@
 #include "ui/UIText.h"
 #include "ui/UITextField.h"
 #include "platform/CCDevice.h"
-#include "cocos2d/MainScene.h"
+#include "MainScene.h"
 #include "ConfigManager/LocaleConfigManager.h"
 #include "cocos2d/CCKeyCodeConv.h"
 #include "csd/CsdUIFactory.h"

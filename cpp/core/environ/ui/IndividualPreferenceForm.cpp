@@ -1,7 +1,7 @@
 #include "IndividualPreferenceForm.h"
 #include "ConfigManager/LocaleConfigManager.h"
 #include "ui/UIButton.h"
-#include "cocos2d/MainScene.h"
+#include "MainScene.h"
 #include "ui/UIListView.h"
 #include "platform/CCFileUtils.h"
 #include "ConfigManager/IndividualConfigManager.h"

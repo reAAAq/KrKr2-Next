@@ -46,6 +46,7 @@ set(VISUAL_SOURCE_FILES
     ${VISUAL_PATH}/ogl/etcpak.cpp
     ${VISUAL_PATH}/ogl/imagepacker.cpp
     ${VISUAL_PATH}/ogl/pvrtc.cpp
+    ${VISUAL_PATH}/ogl/PVRTDecompress.cpp
     ${VISUAL_PATH}/ogl/RenderManager_ogl.cpp
     ${VISUAL_PATH}/ogl/krkr_gl.cpp
     ${VISUAL_PATH}/ogl/krkr_egl_context.cpp
@@ -85,12 +86,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE libbpg)
 find_package(WebP CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} INTERFACE WebP::webp WebP::webpdecoder WebP::webpdemux)
 
-find_package(cocos2dx CONFIG REQUIRED)
-target_link_libraries(${PROJECT_NAME} PRIVATE
-        cocos2dx::cocos2d
-)
-
-# ANGLE (EGL + GLES2) — replaces cocos2dx GL context/rendering
+# ANGLE (EGL + GLES2) — provides GL context and rendering
 if(NOT ANDROID)
     find_package(unofficial-angle CONFIG QUIET)
     if(unofficial-angle_FOUND)
@@ -99,9 +95,9 @@ if(NOT ANDROID)
             unofficial::angle::libGLESv2
         )
         target_compile_definitions(${PROJECT_NAME} PRIVATE KRKR_USE_ANGLE=1)
-        message(STATUS "ANGLE found — EGL + GLES2 libraries linked (Phase 2)")
+        message(STATUS "ANGLE found — EGL + GLES2 libraries linked")
     else()
-        message(STATUS "ANGLE not found — krkr_egl_context will use fallback (current cocos2d GL context)")
+        message(WARNING "ANGLE not found — GL rendering may not work")
     endif()
 endif()
 
@@ -126,3 +122,9 @@ find_package(lz4 CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PUBLIC
     lz4::lz4
 )
+
+find_package(Freetype REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE Freetype::Freetype)
+
+find_package(PNG REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE PNG::PNG)

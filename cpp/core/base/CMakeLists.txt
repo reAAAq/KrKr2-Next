@@ -44,7 +44,7 @@ find_package(LibArchive REQUIRED)
 find_package(LibXml2 REQUIRED)
 find_package(SDL2 CONFIG REQUIRED)
 find_package(zstd CONFIG REQUIRED)
-find_package(cocos2dx CONFIG REQUIRED)
+find_package(unofficial-minizip CONFIG REQUIRED)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     uchardet::libuchardet
@@ -55,5 +55,5 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 
     $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
     $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
-    cocos2dx::cocos2d
+    unofficial::minizip::minizip
 )

@@ -1,5 +1,5 @@
 #include "Platform.h"
-#include "cocos2d/MainScene.h"
+#include "MainScene.h"
 // #undef WIN32
 #include <windows.h>
 #include <mmsystem.h>

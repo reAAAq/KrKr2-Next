@@ -13,10 +13,12 @@
 
 #include "Application.h"
 #include "ConfigManager/LocaleConfigManager.h"
-#include "ui/extension/UIExtension.h"
 #include "krkr_egl_context.h"
 #include "krkr_gl.h"
 #include "ogl_common.h"
+
+// Forward declaration — defined in stubs/ui_stubs.cpp
+void TVPInitUIExtension();
 
 extern "C" void SDL_SetMainReady();
 extern std::thread::id TVPMainThreadID;

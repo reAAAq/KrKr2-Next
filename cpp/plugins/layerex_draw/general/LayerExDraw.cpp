@@ -1,5 +1,4 @@
 #include <spdlog/spdlog.h>
-#include <cocos2d.h>
 #include <filesystem>
 
 #include "common/Defer.h"

@@ -22,8 +22,6 @@
 #import <Cocoa/Cocoa.h>
 #import <AppKit/AppKit.h>
 
-#include <cocos2d.h>
-
 #include "StorageImpl.h"
 #include "EventIntf.h"
 #include "Platform.h"
