@@ -314,9 +314,16 @@ bool tTVPApplication::StartApplication(ttstr path) {
         // for
         // processing object hash map log
 
+        spdlog::debug("StartApplication: normalizing storage path...");
+        spdlog::default_logger()->flush();
         TVPProjectDir = TVPNormalizeStorageName(path);
 
+        spdlog::debug("StartApplication: TVPInitScriptEngine...");
+        spdlog::default_logger()->flush();
         TVPInitScriptEngine();
+
+        spdlog::debug("StartApplication: TVPInitFontNames...");
+        spdlog::default_logger()->flush();
         TVPInitFontNames();
 
         // banner
@@ -324,6 +331,8 @@ bool tTVPApplication::StartApplication(ttstr path) {
                                             TVPGetPlatformName()));
 
         // TVPInitializeBaseSystems
+        spdlog::debug("StartApplication: TVPInitializeBaseSystems...");
+        spdlog::default_logger()->flush();
         TVPInitializeBaseSystems();
 
         Initialize();
@@ -335,7 +344,12 @@ bool tTVPApplication::StartApplication(ttstr path) {
 
         image_load_thread_ = new tTVPAsyncImageLoader();
 
+        spdlog::debug("StartApplication: tvpLoadPlugins...");
+        spdlog::default_logger()->flush();
         tvpLoadPlugins(); // load plugin module *.tpm
+
+        spdlog::debug("StartApplication: TVPSystemInit...");
+        spdlog::default_logger()->flush();
         TVPSystemInit();
 
         if(TVPCheckAbout())
@@ -349,8 +363,12 @@ bool tTVPApplication::StartApplication(ttstr path) {
         // start image load thread
         image_load_thread_->Resume();
 
+        spdlog::debug("StartApplication: TVPInitializeStartupScript...");
+        spdlog::default_logger()->flush();
         TVPInitializeStartupScript();
         _project_startup = true;
+        spdlog::info("StartApplication: completed successfully");
+        spdlog::default_logger()->flush();
     } catch(const EAbort &) {
         // nothing to do
     } catch(const Exception &exception) {

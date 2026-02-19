@@ -14,6 +14,10 @@
 #include <memory>
 #include <vector>
 
+#include <csignal>
+#include <cstdlib>
+#include <execinfo.h>
+
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
@@ -76,15 +80,45 @@ std::shared_ptr<spdlog::logger> EnsureNamedLogger(const char* name) {
   return spdlog::stdout_color_mt(name);
 }
 
+void CrashSignalHandler(int sig) {
+  spdlog::critical("FATAL SIGNAL {} received!", sig);
+
+  // Print a mini backtrace
+  void* frames[32];
+  int count = backtrace(frames, 32);
+  char** symbols = backtrace_symbols(frames, count);
+  if (symbols) {
+    for (int i = 0; i < count; ++i) {
+      spdlog::critical("  [{}] {}", i, symbols[i]);
+    }
+    free(symbols);
+  }
+
+  spdlog::default_logger()->flush();
+  // Re-raise so the OS generates a proper crash report
+  signal(sig, SIG_DFL);
+  raise(sig);
+}
+
+void InstallCrashSignalHandlers() {
+  signal(SIGSEGV, CrashSignalHandler);
+  signal(SIGABRT, CrashSignalHandler);
+  signal(SIGBUS,  CrashSignalHandler);
+  signal(SIGFPE,  CrashSignalHandler);
+}
+
 void EnsureRuntimeLoggersInitialized() {
   std::call_once(g_loggers_init_once, []() {
     spdlog::set_level(spdlog::level::debug);
+    // Flush every log message so crash logs are never lost
+    spdlog::flush_on(spdlog::level::debug);
     auto core_logger = EnsureNamedLogger("core");
     EnsureNamedLogger("tjs2");
     EnsureNamedLogger("plugin");
     if (core_logger != nullptr) {
       spdlog::set_default_logger(core_logger);
     }
+    InstallCrashSignalHandlers();
   });
 }
 
@@ -445,10 +479,23 @@ engine_result_t engine_open_game(engine_handle_t handle,
         "failed to initialize engine runtime for host mode");
   }
 
+  // Initialize loggers early so signal handlers and flush-on-debug are active
+  EnsureRuntimeLoggersInitialized();
+
+  spdlog::info("engine_open_game: runtime initialized, starting application with path: {}", game_root_path_utf8);
+  spdlog::default_logger()->flush();
+
   try {
-    EnsureRuntimeLoggersInitialized();
+    spdlog::debug("engine_open_game: calling Application->StartApplication...");
+    spdlog::default_logger()->flush();
     Application->StartApplication(ttstr(game_root_path_utf8));
+    spdlog::info("engine_open_game: StartApplication returned successfully");
+  } catch (const std::exception& e) {
+    spdlog::error("engine_open_game: StartApplication threw std::exception: {}", e.what());
+    return SetHandleErrorAndReturnLocked(impl, ENGINE_RESULT_INTERNAL_ERROR,
+                                         "StartApplication threw an exception");
   } catch (...) {
+    spdlog::error("engine_open_game: StartApplication threw unknown exception");
     return SetHandleErrorAndReturnLocked(impl, ENGINE_RESULT_INTERNAL_ERROR,
                                          "StartApplication threw an exception");
   }

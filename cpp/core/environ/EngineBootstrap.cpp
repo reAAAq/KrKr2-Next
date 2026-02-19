@@ -44,9 +44,11 @@ bool TVPEngineBootstrap::Initialize(uint32_t width, uint32_t height) {
     SDL_SetMainReady();
     TVPMainThreadID = std::this_thread::get_id();
     spdlog::debug("EngineBootstrap: starting initialization");
+    spdlog::default_logger()->flush();
 
     // 2. Create ANGLE EGL context for headless rendering
     InitializeGraphics(width, height);
+    spdlog::default_logger()->flush();
 
     // 3. Initialize UI extensions
     TVPInitUIExtension();
@@ -56,6 +58,7 @@ bool TVPEngineBootstrap::Initialize(uint32_t width, uint32_t height) {
 
     s_initialized = true;
     spdlog::info("EngineBootstrap: initialization complete ({}x{})", width, height);
+    spdlog::default_logger()->flush();
     return true;
 }
 

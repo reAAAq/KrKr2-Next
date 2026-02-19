@@ -93,8 +93,22 @@ bool EGLContextManager::Initialize(uint32_t width, uint32_t height) {
     }
 
     spdlog::info("ANGLE EGL context created successfully: {}x{}", width, height);
-    spdlog::info("GL_RENDERER: {}", reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
-    spdlog::info("GL_VERSION: {}", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
+    spdlog::default_logger()->flush();
+
+    // glGetString may return nullptr if the context is not fully ready
+    auto safeGlString = [](GLenum name) -> const char* {
+        const char* s = reinterpret_cast<const char*>(glGetString(name));
+        return s ? s : "(null)";
+    };
+    spdlog::info("GL_RENDERER: {}", safeGlString(GL_RENDERER));
+    spdlog::info("GL_VERSION: {}", safeGlString(GL_VERSION));
+    spdlog::default_logger()->flush();
+
+    // Check for GL errors after context creation
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR) {
+        spdlog::warn("GL error after context creation: 0x{:x}", err);
+    }
 
     // Invalidate the GL state cache since we have a fresh context
     krkr::gl::InvalidateStateCache();
