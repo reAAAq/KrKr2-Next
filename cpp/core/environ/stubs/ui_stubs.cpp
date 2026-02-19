@@ -123,26 +123,32 @@ public:
     }
 
     void UpdateDrawBuffer(iTVPTexture2D *tex) override {
-        // Blit the composited scene texture onto the EGL Pbuffer's default
-        // framebuffer so that glReadPixels (called later in engine_tick) can
-        // retrieve the rendered frame.
+        // Blit the composited scene texture to the render target.
+        // When an IOSurface is attached, this goes directly to the shared
+        // IOSurface (zero-copy to Flutter). Otherwise, falls back to
+        // the EGL Pbuffer for glReadPixels-based retrieval.
         if (!tex) return;
 
         const tjs_uint tw = tex->GetWidth();
         const tjs_uint th = tex->GetHeight();
         if (tw == 0 || th == 0) return;
 
-        // Read pixel data from the texture (CPU-side) and upload to
-        // the default framebuffer via glDrawPixels equivalent for GLES:
-        // bind default FBO, create a temp texture, draw a fullscreen quad.
         EnsureBlitResources();
 
-        // Bind default framebuffer (EGL Pbuffer surface)
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
         auto& egl = krkr::GetEngineEGLContext();
-        const uint32_t fbW = egl.GetWidth();
-        const uint32_t fbH = egl.GetHeight();
+
+        // Bind the IOSurface FBO or default FBO
+        egl.BindRenderTarget();
+
+        // Determine the actual render target dimensions
+        uint32_t fbW, fbH;
+        if (egl.HasIOSurface()) {
+            fbW = egl.GetIOSurfaceWidth();
+            fbH = egl.GetIOSurfaceHeight();
+        } else {
+            fbW = egl.GetWidth();
+            fbH = egl.GetHeight();
+        }
         glViewport(0, 0, static_cast<GLsizei>(fbW), static_cast<GLsizei>(fbH));
 
         // Upload texture data to our blit texture

@@ -7,7 +7,16 @@
 #include "krkr_gl.h"
 
 #include <GLES2/gl2.h>
+#include <GLES3/gl3.h>
 #include <spdlog/spdlog.h>
+
+#if defined(__APPLE__)
+#include <IOSurface/IOSurface.h>
+#include <EGL/eglext.h>
+#include <EGL/eglext_angle.h>
+#include <GLES2/gl2ext.h>
+#include <GLES2/gl2ext_angle.h>
+#endif
 
 namespace krkr {
 
@@ -214,6 +223,189 @@ void EGLContextManager::DestroySurface() {
         eglDestroySurface(display_, surface_);
         surface_ = EGL_NO_SURFACE;
     }
+}
+
+// ---------------------------------------------------------------------------
+// IOSurface FBO attachment (macOS zero-copy rendering)
+// ---------------------------------------------------------------------------
+
+bool EGLContextManager::AttachIOSurface(uint32_t iosurface_id,
+                                         uint32_t width, uint32_t height) {
+#if defined(__APPLE__)
+    if (context_ == EGL_NO_CONTEXT) {
+        spdlog::error("AttachIOSurface: EGL context not initialized");
+        return false;
+    }
+    if (iosurface_id == 0 || width == 0 || height == 0) {
+        spdlog::error("AttachIOSurface: invalid parameters (id={}, {}x{})",
+                      iosurface_id, width, height);
+        return false;
+    }
+
+    // Clean up previous IOSurface resources
+    DestroyIOSurfaceResources();
+
+    // Look up the IOSurface by ID
+    IOSurfaceRef surface = IOSurfaceLookup(iosurface_id);
+    if (!surface) {
+        spdlog::error("AttachIOSurface: IOSurfaceLookup({}) failed", iosurface_id);
+        return false;
+    }
+
+    // Query the texture target supported by this config
+    EGLint textureTarget = 0;
+    eglGetConfigAttrib(display_, config_, EGL_BIND_TO_TEXTURE_TARGET_ANGLE,
+                       &textureTarget);
+    if (textureTarget == 0) {
+        // Fallback: try EGL_TEXTURE_RECTANGLE_ANGLE (common on macOS Metal)
+        textureTarget = EGL_TEXTURE_RECTANGLE_ANGLE;
+    }
+    spdlog::info("AttachIOSurface: EGL_BIND_TO_TEXTURE_TARGET_ANGLE = 0x{:x}",
+                 textureTarget);
+
+    // Determine the corresponding GL texture target
+    GLenum glTextureTarget = GL_TEXTURE_2D;
+    if (textureTarget == EGL_TEXTURE_RECTANGLE_ANGLE) {
+        glTextureTarget = GL_TEXTURE_RECTANGLE_ANGLE;
+    }
+
+    // Create a Pbuffer from the IOSurface using ANGLE's extension
+    // EGL_ANGLE_iosurface_client_buffer
+    const EGLint pbufferAttribs[] = {
+        EGL_WIDTH,                         static_cast<EGLint>(width),
+        EGL_HEIGHT,                        static_cast<EGLint>(height),
+        EGL_IOSURFACE_PLANE_ANGLE,         0,
+        EGL_TEXTURE_TARGET,                textureTarget,
+        EGL_TEXTURE_INTERNAL_FORMAT_ANGLE, GL_BGRA_EXT,
+        EGL_TEXTURE_FORMAT,                EGL_TEXTURE_RGBA,
+        EGL_TEXTURE_TYPE_ANGLE,            GL_UNSIGNED_BYTE,
+        EGL_NONE,                          EGL_NONE,
+    };
+
+    EGLSurface pbuffer = eglCreatePbufferFromClientBuffer(
+        display_, EGL_IOSURFACE_ANGLE,
+        static_cast<EGLClientBuffer>(surface),
+        config_, pbufferAttribs);
+
+    CFRelease(surface);
+
+    if (pbuffer == EGL_NO_SURFACE) {
+        spdlog::error("AttachIOSurface: eglCreatePbufferFromClientBuffer failed: 0x{:x}",
+                      eglGetError());
+        return false;
+    }
+
+    // Create a GL texture and bind the IOSurface pbuffer to it
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(glTextureTarget, tex);
+    glTexParameteri(glTextureTarget, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(glTextureTarget, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    // Bind the pbuffer to the texture (this connects the IOSurface content)
+    EGLBoolean bindResult = eglBindTexImage(display_, pbuffer, EGL_BACK_BUFFER);
+    if (!bindResult) {
+        spdlog::error("AttachIOSurface: eglBindTexImage failed: 0x{:x}",
+                      eglGetError());
+        glDeleteTextures(1, &tex);
+        eglDestroySurface(display_, pbuffer);
+        return false;
+    }
+
+    // Create FBO and attach the IOSurface-backed texture
+    GLuint fbo = 0;
+    glGenFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                            glTextureTarget, tex, 0);
+
+    // Create stencil renderbuffer
+    GLuint rbo = 0;
+    glGenRenderbuffers(1, &rbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_STENCIL_INDEX8,
+                          static_cast<GLsizei>(width),
+                          static_cast<GLsizei>(height));
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT,
+                               GL_RENDERBUFFER, rbo);
+
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        spdlog::error("AttachIOSurface: FBO incomplete: 0x{:x}", status);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glDeleteFramebuffers(1, &fbo);
+        eglReleaseTexImage(display_, pbuffer, EGL_BACK_BUFFER);
+        glDeleteTextures(1, &tex);
+        glDeleteRenderbuffers(1, &rbo);
+        eglDestroySurface(display_, pbuffer);
+        return false;
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    iosurface_pbuffer_ = pbuffer;
+    iosurface_fbo_ = fbo;
+    iosurface_texture_ = tex;
+    iosurface_tex_target_ = glTextureTarget;
+    iosurface_rbo_depth_ = rbo;
+    iosurface_width_ = width;
+    iosurface_height_ = height;
+    iosurface_id_ = iosurface_id;
+
+    spdlog::info("AttachIOSurface: success (id={}, {}x{}, fbo={}, tex={}, target=0x{:x})",
+                 iosurface_id, width, height, fbo, tex, glTextureTarget);
+    return true;
+#else
+    (void)iosurface_id;
+    (void)width;
+    (void)height;
+    spdlog::error("AttachIOSurface: not supported on this platform");
+    return false;
+#endif
+}
+
+void EGLContextManager::DetachIOSurface() {
+    DestroyIOSurfaceResources();
+    spdlog::info("DetachIOSurface: reverted to Pbuffer mode");
+}
+
+void EGLContextManager::BindRenderTarget() {
+    if (iosurface_fbo_ != 0) {
+        glBindFramebuffer(GL_FRAMEBUFFER, iosurface_fbo_);
+        glViewport(0, 0, static_cast<GLsizei>(iosurface_width_),
+                   static_cast<GLsizei>(iosurface_height_));
+    } else {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, static_cast<GLsizei>(width_),
+                   static_cast<GLsizei>(height_));
+    }
+}
+
+void EGLContextManager::DestroyIOSurfaceResources() {
+    if (iosurface_fbo_ != 0) {
+        glDeleteFramebuffers(1, &iosurface_fbo_);
+        iosurface_fbo_ = 0;
+    }
+    if (iosurface_rbo_depth_ != 0) {
+        glDeleteRenderbuffers(1, &iosurface_rbo_depth_);
+        iosurface_rbo_depth_ = 0;
+    }
+    if (iosurface_texture_ != 0) {
+        // Release the texture image binding before deleting
+        if (iosurface_pbuffer_ != EGL_NO_SURFACE && display_ != EGL_NO_DISPLAY) {
+            eglReleaseTexImage(display_, iosurface_pbuffer_, EGL_BACK_BUFFER);
+        }
+        glDeleteTextures(1, &iosurface_texture_);
+        iosurface_texture_ = 0;
+    }
+    if (iosurface_pbuffer_ != EGL_NO_SURFACE && display_ != EGL_NO_DISPLAY) {
+        eglDestroySurface(display_, iosurface_pbuffer_);
+        iosurface_pbuffer_ = EGL_NO_SURFACE;
+    }
+    iosurface_tex_target_ = 0;
+    iosurface_width_ = 0;
+    iosurface_height_ = 0;
+    iosurface_id_ = 0;
 }
 
 // ---------------------------------------------------------------------------

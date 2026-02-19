@@ -49,6 +49,8 @@ struct engine_handle_s {
   std::unordered_set<intptr_t> active_pointer_ids;
   std::deque<engine_input_event_t> pending_input_events;
   bool native_mouse_callbacks_disabled = false;
+  bool iosurface_attached = false;
+  bool frame_rendered_this_tick = false;
 };
 
 namespace {
@@ -613,28 +615,42 @@ engine_result_t engine_tick(engine_handle_t handle, uint32_t delta_ms) {
         "runtime requested termination");
   }
 
-  const FrameReadbackLayout layout = GetFrameReadbackLayoutLocked(impl);
-  const size_t required_size =
-      static_cast<size_t>(layout.stride_bytes) *
-      static_cast<size_t>(layout.height);
-  if (impl->frame_rgba.size() != required_size) {
-    impl->frame_rgba.assign(required_size, 0);
-  }
+  // Mark that a frame was rendered this tick (for IOSurface mode notification)
+  impl->frame_rendered_this_tick = true;
 
-  if (required_size > 0 &&
-      ReadCurrentFrameRgba(layout, impl->frame_rgba.data())) {
-    impl->frame_width = layout.width;
-    impl->frame_height = layout.height;
-    impl->frame_stride_bytes = layout.stride_bytes;
-    impl->frame_ready = true;
+  // In IOSurface mode, the engine renders directly to the shared IOSurface
+  // via the FBO — no need for glReadPixels. Skip the expensive readback.
+  if (!impl->iosurface_attached) {
+    // Legacy Pbuffer readback path (slow, for backward compatibility)
+    const FrameReadbackLayout layout = GetFrameReadbackLayoutLocked(impl);
+    const size_t required_size =
+        static_cast<size_t>(layout.stride_bytes) *
+        static_cast<size_t>(layout.height);
+    if (impl->frame_rgba.size() != required_size) {
+      impl->frame_rgba.assign(required_size, 0);
+    }
+
+    if (required_size > 0 &&
+        ReadCurrentFrameRgba(layout, impl->frame_rgba.data())) {
+      impl->frame_width = layout.width;
+      impl->frame_height = layout.height;
+      impl->frame_stride_bytes = layout.stride_bytes;
+      impl->frame_ready = true;
+      impl->frame_serial += 1;
+    } else if (!impl->frame_ready && required_size > 0) {
+      std::fill(impl->frame_rgba.begin(), impl->frame_rgba.end(), 0);
+      impl->frame_width = layout.width;
+      impl->frame_height = layout.height;
+      impl->frame_stride_bytes = layout.stride_bytes;
+      impl->frame_ready = true;
+      impl->frame_serial += 1;
+    }
+  } else {
+    // IOSurface mode — just increment frame serial, no readback needed.
+    // The render output is already in the shared IOSurface.
+    glFlush(); // Ensure GPU commands are submitted
     impl->frame_serial += 1;
-  } else if (!impl->frame_ready && required_size > 0) {
-    std::fill(impl->frame_rgba.begin(), impl->frame_rgba.end(), 0);
-    impl->frame_width = layout.width;
-    impl->frame_height = layout.height;
-    impl->frame_stride_bytes = layout.stride_bytes;
     impl->frame_ready = true;
-    impl->frame_serial += 1;
   }
 
   ClearHandleErrorLocked(impl);
@@ -1072,6 +1088,100 @@ engine_result_t engine_send_input(engine_handle_t handle,
   if (impl->pending_input_events.size() > kMaxQueuedInputs) {
     impl->pending_input_events.pop_front();
   }
+
+  ClearHandleErrorLocked(impl);
+  SetThreadError(nullptr);
+  return ENGINE_RESULT_OK;
+}
+
+engine_result_t engine_set_render_target_iosurface(engine_handle_t handle,
+                                                    uint32_t iosurface_id,
+                                                    uint32_t width,
+                                                    uint32_t height) {
+  std::lock_guard<std::recursive_mutex> registry_guard(g_registry_mutex);
+  engine_handle_s* impl = nullptr;
+  auto result = ValidateHandleLocked(handle, &impl);
+  if (result != ENGINE_RESULT_OK) {
+    return result;
+  }
+
+  std::lock_guard<std::recursive_mutex> guard(impl->mutex);
+  result = ValidateHandleThreadLocked(impl);
+  if (result != ENGINE_RESULT_OK) {
+    return result;
+  }
+
+  if (!g_runtime_active || g_runtime_owner != handle) {
+    return SetHandleErrorAndReturnLocked(
+        impl,
+        ENGINE_RESULT_INVALID_STATE,
+        "engine_open_game must succeed before engine_set_render_target_iosurface");
+  }
+
+#if defined(__APPLE__)
+  auto& egl = krkr::GetEngineEGLContext();
+  if (!egl.IsValid()) {
+    return SetHandleErrorAndReturnLocked(
+        impl,
+        ENGINE_RESULT_INVALID_STATE,
+        "EGL context not initialized");
+  }
+
+  if (iosurface_id == 0) {
+    // Detach — revert to Pbuffer mode
+    egl.DetachIOSurface();
+    impl->iosurface_attached = false;
+    spdlog::info("engine_set_render_target_iosurface: detached, Pbuffer mode");
+  } else {
+    if (width == 0 || height == 0) {
+      return SetHandleErrorAndReturnLocked(
+          impl,
+          ENGINE_RESULT_INVALID_ARGUMENT,
+          "width and height must be > 0 when setting IOSurface");
+    }
+    if (!egl.AttachIOSurface(iosurface_id, width, height)) {
+      return SetHandleErrorAndReturnLocked(
+          impl,
+          ENGINE_RESULT_INTERNAL_ERROR,
+          "failed to attach IOSurface as render target");
+    }
+    impl->iosurface_attached = true;
+    spdlog::info("engine_set_render_target_iosurface: attached id={} {}x{}",
+                 iosurface_id, width, height);
+  }
+
+  ClearHandleErrorLocked(impl);
+  SetThreadError(nullptr);
+  return ENGINE_RESULT_OK;
+#else
+  (void)iosurface_id;
+  (void)width;
+  (void)height;
+  return SetHandleErrorAndReturnLocked(
+      impl,
+      ENGINE_RESULT_NOT_SUPPORTED,
+      "IOSurface render target is only supported on macOS");
+#endif
+}
+
+engine_result_t engine_get_frame_rendered_flag(engine_handle_t handle,
+                                                uint32_t* out_flag) {
+  if (out_flag == nullptr) {
+    return SetThreadErrorAndReturn(ENGINE_RESULT_INVALID_ARGUMENT,
+                                   "out_flag is null");
+  }
+
+  std::lock_guard<std::recursive_mutex> registry_guard(g_registry_mutex);
+  engine_handle_s* impl = nullptr;
+  auto result = ValidateHandleLocked(handle, &impl);
+  if (result != ENGINE_RESULT_OK) {
+    *out_flag = 0;
+    return result;
+  }
+
+  std::lock_guard<std::recursive_mutex> guard(impl->mutex);
+  *out_flag = impl->frame_rendered_this_tick ? 1 : 0;
+  impl->frame_rendered_this_tick = false;
 
   ClearHandleErrorLocked(impl);
   SetThreadError(nullptr);
@@ -1580,6 +1690,46 @@ engine_result_t engine_send_input(engine_handle_t handle,
     default:
       SetHandleErrorLocked(impl, "unsupported input event type");
       return ENGINE_RESULT_NOT_SUPPORTED;
+  }
+
+  impl->last_error.clear();
+  SetThreadError(nullptr);
+  return ENGINE_RESULT_OK;
+}
+
+engine_result_t engine_set_render_target_iosurface(engine_handle_t handle,
+                                                    uint32_t iosurface_id,
+                                                    uint32_t width,
+                                                    uint32_t height) {
+  (void)iosurface_id;
+  (void)width;
+  (void)height;
+
+  std::lock_guard<std::recursive_mutex> registry_guard(g_registry_mutex);
+  engine_handle_s* impl = nullptr;
+  auto result = ValidateHandleLocked(handle, &impl);
+  if (result != ENGINE_RESULT_OK) {
+    return result;
+  }
+
+  SetHandleErrorLocked(impl,
+                       "engine_set_render_target_iosurface is not supported in stub build");
+  return ENGINE_RESULT_NOT_SUPPORTED;
+}
+
+engine_result_t engine_get_frame_rendered_flag(engine_handle_t handle,
+                                                uint32_t* out_flag) {
+  if (out_flag == nullptr) {
+    return SetThreadErrorAndReturn(ENGINE_RESULT_INVALID_ARGUMENT,
+                                   "out_flag is null");
+  }
+  *out_flag = 0;
+
+  std::lock_guard<std::recursive_mutex> registry_guard(g_registry_mutex);
+  engine_handle_s* impl = nullptr;
+  auto result = ValidateHandleLocked(handle, &impl);
+  if (result != ENGINE_RESULT_OK) {
+    return result;
   }
 
   impl->last_error.clear();

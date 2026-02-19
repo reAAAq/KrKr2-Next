@@ -207,6 +207,36 @@ ENGINE_API_EXPORT engine_result_t engine_send_input(engine_handle_t handle,
                                                     const engine_input_event_t* event);
 
 /*
+ * Sets an IOSurface as the render target for the engine.
+ * When set, engine_tick renders directly to this IOSurface (zero-copy),
+ * bypassing the glReadPixels path used by engine_read_frame_rgba.
+ *
+ * iosurface_id: The IOSurfaceID obtained from IOSurfaceGetID().
+ *               Pass 0 to detach and revert to the default Pbuffer mode.
+ * width/height: Dimensions of the IOSurface in pixels.
+ *
+ * Platform: macOS only. Returns ENGINE_RESULT_NOT_SUPPORTED on other platforms.
+ */
+ENGINE_API_EXPORT engine_result_t engine_set_render_target_iosurface(
+    engine_handle_t handle, uint32_t iosurface_id,
+    uint32_t width, uint32_t height);
+
+/*
+ * Queries whether the last engine_tick produced a new rendered frame.
+ * out_
+ *
+ * out_
+ *   - 0: no new frame since last query
+ *   - 1: a new frame was rendered
+ *
+ * This is useful in IOSurface mode to know when to call
+ * textureFrameAvailable() on the Flutter side.
+ */
+ENGINE_API_EXPORT engine_result_t engine_get_frame_rendered_flag(
+    engine_handle_t handle, uint32_t* out_
+);
+
+/*
  * Returns last error message as UTF-8 null-terminated string.
  * The returned pointer remains valid until next API call on the same handle.
  * Returns empty string when no error is recorded.
