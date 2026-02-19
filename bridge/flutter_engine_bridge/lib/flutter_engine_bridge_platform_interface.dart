@@ -47,4 +47,15 @@ abstract class FlutterEngineBridgePlatform extends PlatformInterface {
   Future<void> disposeTexture({required int textureId}) {
     throw UnimplementedError('disposeTexture() has not been implemented.');
   }
+
+  Future<void> attachNativeWindow({
+    required int viewId,
+    required int windowHandle,
+  }) {
+    throw UnimplementedError('attachNativeWindow() has not been implemented.');
+  }
+
+  Future<void> detachNativeWindow({required int viewId}) {
+    throw UnimplementedError('detachNativeWindow() has not been implemented.');
+  }
 }

@@ -175,6 +175,27 @@ class FlutterEngineBridge {
     return frameData;
   }
 
+  Future<int?> engineGetHostNativeWindow() async {
+    final ffi = _ffiBridge;
+    if (ffi == null) {
+      final platformVersion = await _platform.getPlatformVersion();
+      final versionLabel = platformVersion ?? 'unknown';
+      _fallbackLastError = _buildFallbackError(
+        'FFI unavailable for engine_get_host_native_window. '
+        'MethodChannel fallback active ($versionLabel).',
+      );
+      return null;
+    }
+
+    final int? windowHandle = ffi.getHostNativeWindowHandle();
+    if (windowHandle == null) {
+      _fallbackLastError = ffi.lastError();
+    } else {
+      _fallbackLastError = '';
+    }
+    return windowHandle;
+  }
+
   Future<int> engineSendInput(EngineInputEventData event) async {
     return _withFfiCall(
       apiName: 'engine_send_input',
@@ -218,6 +239,30 @@ class FlutterEngineBridge {
       await _platform.disposeTexture(textureId: textureId);
     } catch (error) {
       _fallbackLastError = 'disposeTexture failed: $error';
+    }
+  }
+
+  Future<void> attachNativeWindow({
+    required int viewId,
+    required int windowHandle,
+  }) async {
+    try {
+      await _platform.attachNativeWindow(
+        viewId: viewId,
+        windowHandle: windowHandle,
+      );
+    } catch (error) {
+      _fallbackLastError = 'attachNativeWindow failed: $error';
+      rethrow;
+    }
+  }
+
+  Future<void> detachNativeWindow({required int viewId}) async {
+    try {
+      await _platform.detachNativeWindow(viewId: viewId);
+    } catch (error) {
+      _fallbackLastError = 'detachNativeWindow failed: $error';
+      rethrow;
     }
   }
 

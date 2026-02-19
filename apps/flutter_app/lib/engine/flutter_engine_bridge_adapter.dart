@@ -106,6 +106,11 @@ class FlutterEngineBridgeAdapter implements EngineBridge {
   }
 
   @override
+  Future<int?> engineGetHostNativeWindow() {
+    return _delegate.engineGetHostNativeWindow();
+  }
+
+  @override
   Future<int> engineSendInput(EngineInputEventData event) {
     return _delegate.engineSendInput(
       plugin_bridge.EngineInputEventData(
@@ -149,6 +154,22 @@ class FlutterEngineBridgeAdapter implements EngineBridge {
   @override
   Future<void> disposeTexture({required int textureId}) {
     return _delegate.disposeTexture(textureId: textureId);
+  }
+
+  @override
+  Future<void> attachNativeWindow({
+    required int viewId,
+    required int windowHandle,
+  }) {
+    return _delegate.attachNativeWindow(
+      viewId: viewId,
+      windowHandle: windowHandle,
+    );
+  }
+
+  @override
+  Future<void> detachNativeWindow({required int viewId}) {
+    return _delegate.detachNativeWindow(viewId: viewId);
   }
 
   @override

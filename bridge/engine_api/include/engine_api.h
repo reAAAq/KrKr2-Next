@@ -184,6 +184,14 @@ ENGINE_API_EXPORT engine_result_t engine_read_frame_rgba(
     engine_handle_t handle, void* out_pixels, size_t out_pixels_size);
 
 /*
+ * Gets host-native render window handle.
+ * On macOS runtime build this is NSWindow*.
+ * Returns ENGINE_RESULT_NOT_SUPPORTED on unsupported platforms/builds.
+ */
+ENGINE_API_EXPORT engine_result_t engine_get_host_native_window(
+    engine_handle_t handle, void** out_window_handle);
+
+/*
  * Sends one input event to the runtime.
  * event->struct_size must be initialized by caller.
  */
