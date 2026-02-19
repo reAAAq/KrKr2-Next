@@ -99,6 +99,9 @@ private final class EngineNativeSurfaceView: NSView {
   private weak var nativeViewOwnerWindow: NSWindow?
   private var nativeViewWindowPlaceholder: NSView?
   private var nativeViewPinnedConstraints: [NSLayoutConstraint] = []
+  private weak var nativeViewOriginalSuperview: NSView?
+  private var nativeViewOriginalFrame: NSRect = .zero
+  private var nativeViewOriginalAutoresizingMask: NSView.AutoresizingMask = []
   private var nativeViewOriginalTranslatesAutoresizingMask = true
   private var nativeWindow: NSWindow?
   private var hostWindowObservers: [NSObjectProtocol] = []
@@ -154,21 +157,31 @@ private final class EngineNativeSurfaceView: NSView {
   }
 
   func attachNativeView(_ view: NSView, nativeWindow window: NSWindow?) {
-    if nativeView === view {
+    let ownerWindow = window ?? view.window
+    let targetView = resolvePreferredNativeAttachView(
+      sourceView: view,
+      ownerWindow: ownerWindow
+    )
+    if nativeView === targetView {
       return
     }
 
     detachNativeWindow()
     detachNativeView()
 
-    nativeView = view
-    nativeViewOwnerWindow = window ?? view.window
+    nativeView = targetView
+    nativeViewOwnerWindow = ownerWindow
+    nativeViewOriginalSuperview = targetView.superview
+    nativeViewOriginalFrame = targetView.frame
+    nativeViewOriginalAutoresizingMask = targetView.autoresizingMask
     nativeViewOriginalTranslatesAutoresizingMask =
-      view.translatesAutoresizingMaskIntoConstraints
+      targetView.translatesAutoresizingMaskIntoConstraints
     nativeViewWindowPlaceholder = nil
 
-    if let ownerWindow = nativeViewOwnerWindow, ownerWindow.contentView === view {
-      let placeholder = NSView(frame: view.frame)
+    if let ownerWindow = nativeViewOwnerWindow,
+      ownerWindow.contentView === targetView
+    {
+      let placeholder = NSView(frame: targetView.frame)
       placeholder.wantsLayer = true
       placeholder.layer?.backgroundColor = NSColor.black.cgColor
       ownerWindow.contentView = placeholder
@@ -176,15 +189,15 @@ private final class EngineNativeSurfaceView: NSView {
       ownerWindow.orderOut(nil)
     }
 
-    view.removeFromSuperview()
-    view.translatesAutoresizingMaskIntoConstraints = false
-    addSubview(view)
+    targetView.removeFromSuperview()
+    targetView.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(targetView)
 
     nativeViewPinnedConstraints = [
-      view.leadingAnchor.constraint(equalTo: leadingAnchor),
-      view.trailingAnchor.constraint(equalTo: trailingAnchor),
-      view.topAnchor.constraint(equalTo: topAnchor),
-      view.bottomAnchor.constraint(equalTo: bottomAnchor),
+      targetView.leadingAnchor.constraint(equalTo: leadingAnchor),
+      targetView.trailingAnchor.constraint(equalTo: trailingAnchor),
+      targetView.topAnchor.constraint(equalTo: topAnchor),
+      targetView.bottomAnchor.constraint(equalTo: bottomAnchor),
     ]
     NSLayoutConstraint.activate(nativeViewPinnedConstraints)
     needsLayout = true
@@ -202,12 +215,16 @@ private final class EngineNativeSurfaceView: NSView {
     nativeView.removeFromSuperview()
     nativeView.translatesAutoresizingMaskIntoConstraints =
       nativeViewOriginalTranslatesAutoresizingMask
+    nativeView.autoresizingMask = nativeViewOriginalAutoresizingMask
+    nativeView.frame = nativeViewOriginalFrame
 
     if let ownerWindow = nativeViewOwnerWindow {
       if let placeholder = nativeViewWindowPlaceholder,
         ownerWindow.contentView === placeholder
       {
         ownerWindow.contentView = nativeView
+      } else if let originalSuperview = nativeViewOriginalSuperview {
+        originalSuperview.addSubview(nativeView)
       } else if ownerWindow.contentView == nil {
         ownerWindow.contentView = nativeView
       }
@@ -217,6 +234,30 @@ private final class EngineNativeSurfaceView: NSView {
     self.nativeView = nil
     nativeViewOwnerWindow = nil
     nativeViewWindowPlaceholder = nil
+    nativeViewOriginalSuperview = nil
+    nativeViewOriginalFrame = .zero
+    nativeViewOriginalAutoresizingMask = []
+  }
+
+  private func resolvePreferredNativeAttachView(
+    sourceView: NSView,
+    ownerWindow: NSWindow?
+  ) -> NSView {
+    guard ownerWindow?.contentView === sourceView else {
+      return sourceView
+    }
+
+    // Prefer the deepest single-child chain under contentView. In practice the
+    // innermost view is usually the real GL render view and avoids letterboxing.
+    var candidate = sourceView
+    for _ in 0..<6 {
+      guard candidate.subviews.count == 1, let child = candidate.subviews.first
+      else {
+        break
+      }
+      candidate = child
+    }
+    return candidate
   }
 
   func attachNativeWindow(_ window: NSWindow) {

@@ -124,7 +124,7 @@ class _EngineNativeSurfaceState extends State<EngineNativeSurface> {
     if (!widget.active ||
         !Platform.isMacOS ||
         _nativeHandleQueryInFlight ||
-        (_nativeViewHandle != null || _nativeWindowHandle != null)) {
+        _nativeViewHandle != null) {
       return;
     }
 
@@ -150,9 +150,12 @@ class _EngineNativeSurfaceState extends State<EngineNativeSurface> {
         return;
       }
 
+      final bool hadWindowAttach = _attached && !_attachedAsNativeView;
+      final bool hasNewNativeView = resolvedViewHandle != null;
+
       setState(() {
-        _nativeViewHandle = resolvedViewHandle;
-        _nativeWindowHandle = resolvedWindowHandle;
+        _nativeViewHandle = resolvedViewHandle ?? _nativeViewHandle;
+        _nativeWindowHandle = resolvedWindowHandle ?? _nativeWindowHandle;
       });
       if (resolvedViewHandle != null) {
         widget.onLog?.call(
@@ -163,6 +166,12 @@ class _EngineNativeSurfaceState extends State<EngineNativeSurface> {
         widget.onLog?.call(
           'native window handle ready: 0x${resolvedWindowHandle.toRadixString(16)}',
         );
+      }
+
+      // If we were attached via child window fallback, upgrade to NSView attach
+      // as soon as a valid native view handle is available.
+      if (hadWindowAttach && hasNewNativeView) {
+        await _detachIfNeeded();
       }
       await _tryAttach();
     } catch (error) {
