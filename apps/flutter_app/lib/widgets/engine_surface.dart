@@ -477,6 +477,15 @@ class _EngineSurfaceState extends State<EngineSurface> {
     );
   }
 
+  /// Convert Flutter's button bitmask to engine button index.
+  /// Flutter: kPrimaryButton=1, kSecondaryButton=2, kMiddleMouseButton=4
+  /// Engine:  0=left, 1=right, 2=middle
+  static int _flutterButtonsToEngineButton(int buttons) {
+    if (buttons & kSecondaryButton != 0) return 1; // right
+    if (buttons & kMiddleMouseButton != 0) return 2; // middle
+    return 0; // left (default)
+  }
+
   void _sendPointer({
     required int type,
     required PointerEvent event,
@@ -496,7 +505,7 @@ class _EngineSurfaceState extends State<EngineSurface> {
           deltaX: (deltaX ?? event.delta.dx) * _devicePixelRatio,
           deltaY: (deltaY ?? event.delta.dy) * _devicePixelRatio,
           pointerId: event.pointer,
-          button: event.buttons,
+          button: _flutterButtonsToEngineButton(event.buttons),
         ),
       ),
     );
@@ -576,6 +585,7 @@ class _EngineSurfaceState extends State<EngineSurface> {
             autofocus: true,
             onKeyEvent: _onKeyEvent,
             child: Listener(
+              behavior: HitTestBehavior.opaque,
               onPointerDown: (event) {
                 _focusNode.requestFocus();
                 _sendPointer(
