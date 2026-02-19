@@ -5,14 +5,13 @@ import 'package:flutter/material.dart';
 
 import 'engine/engine_bridge.dart';
 import 'engine/flutter_engine_bridge_adapter.dart';
-import 'widgets/engine_native_surface.dart';
 import 'widgets/engine_surface.dart';
 
 void main() {
   runApp(const FlutterShellApp());
 }
 
-enum SurfaceRenderMode { nativeView, texture, software }
+enum SurfaceRenderMode { texture, software }
 
 class FlutterShellApp extends StatelessWidget {
   const FlutterShellApp({
@@ -665,22 +664,7 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage>
         _engineStatus == 'Opened' ||
         _engineStatus == 'Ticking' ||
         _engineStatus == 'Paused';
-    final Widget engineSurface = _surfaceMode == SurfaceRenderMode.nativeView
-        ? EngineNativeSurface(
-            bridge: _bridge,
-            active: isSurfaceActive,
-            onLog: (String message) {
-              _appendLog('surface: $message');
-            },
-            onError: (String message) {
-              if (!mounted) return;
-              setState(() {
-                _lastError = 'Last error: $message';
-              });
-              _appendLog('surface error: $message');
-            },
-          )
-        : EngineSurface(
+    final Widget engineSurface = EngineSurface(
             bridge: _bridge,
             active: isSurfaceActive,
             preferTexture: _surfaceMode == SurfaceRenderMode.texture,
@@ -736,10 +720,6 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage>
         SegmentedButton<SurfaceRenderMode>(
           segments: const [
             ButtonSegment<SurfaceRenderMode>(
-              value: SurfaceRenderMode.nativeView,
-              label: Text('nativeView'),
-            ),
-            ButtonSegment<SurfaceRenderMode>(
               value: SurfaceRenderMode.texture,
               label: Text('texture'),
             ),
@@ -768,13 +748,6 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage>
           'Tip: Click the surface to focus, then keyboard input will be forwarded.',
           textAlign: TextAlign.center,
         ),
-        if (_surfaceMode == SurfaceRenderMode.nativeView) ...[
-          const SizedBox(height: 4),
-          const Text(
-            'nativeView mode pins surface in a fixed viewport; controls scroll below.',
-            textAlign: TextAlign.center,
-          ),
-        ],
       ],
     );
     final Widget controlsSection = Column(
@@ -918,7 +891,7 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage>
         ),
       ],
     );
-    final bool pinNativeSurface = _surfaceMode == SurfaceRenderMode.nativeView;
+    final bool pinNativeSurface = false;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Krkr2 Flutter Shell')),
