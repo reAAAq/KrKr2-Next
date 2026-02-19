@@ -69,6 +69,7 @@ abstract interface class EngineBridge {
   Future<EngineFrameInfo?> engineGetFrameDesc();
   Future<Uint8List?> engineReadFrameRgba();
   Future<EngineFrameData?> engineReadFrame();
+  Future<int?> engineGetHostNativeView();
   Future<int?> engineGetHostNativeWindow();
   Future<int> engineSendInput(EngineInputEventData event);
   Future<int?> createTexture({required int width, required int height});
@@ -84,6 +85,12 @@ abstract interface class EngineBridge {
     required int viewId,
     required int windowHandle,
   });
+  Future<void> attachNativeView({
+    required int viewId,
+    required int viewHandle,
+    int? windowHandle,
+  });
+  Future<void> detachNativeView({required int viewId});
   Future<void> detachNativeWindow({required int viewId});
   Future<int> engineRuntimeApiVersion();
 

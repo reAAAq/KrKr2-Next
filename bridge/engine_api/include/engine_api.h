@@ -192,6 +192,14 @@ ENGINE_API_EXPORT engine_result_t engine_get_host_native_window(
     engine_handle_t handle, void** out_window_handle);
 
 /*
+ * Gets host-native render view handle.
+ * On macOS runtime build this is NSView* (typically the GLFW content view).
+ * Returns ENGINE_RESULT_NOT_SUPPORTED on unsupported platforms/builds.
+ */
+ENGINE_API_EXPORT engine_result_t engine_get_host_native_view(
+    engine_handle_t handle, void** out_view_handle);
+
+/*
  * Sends one input event to the runtime.
  * event->struct_size must be initialized by caller.
  */

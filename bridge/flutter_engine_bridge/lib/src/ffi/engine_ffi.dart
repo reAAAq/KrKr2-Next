@@ -288,19 +288,33 @@ class EngineFfiBridge {
     if (getWindowHandle == null) {
       return null;
     }
-    final outWindowHandle = calloc<Pointer<Void>>();
+    return _queryHostHandle(getWindowHandle);
+  }
+
+  int? getHostNativeViewHandle() {
+    final getViewHandle = _bindings.engineGetHostNativeView;
+    if (getViewHandle == null) {
+      return null;
+    }
+    return _queryHostHandle(getViewHandle);
+  }
+
+  int? _queryHostHandle(
+    int Function(Pointer<Void>, Pointer<Pointer<Void>>) query,
+  ) {
+    final outHandle = calloc<Pointer<Void>>();
     try {
-      final int result = getWindowHandle(_handle, outWindowHandle);
+      final int result = query(_handle, outHandle);
       if (result != kEngineResultOk) {
         return null;
       }
-      final Pointer<Void> handlePtr = outWindowHandle.value;
+      final Pointer<Void> handlePtr = outHandle.value;
       if (handlePtr == nullptr) {
         return null;
       }
       return handlePtr.address;
     } finally {
-      calloc.free(outWindowHandle);
+      calloc.free(outHandle);
     }
   }
 

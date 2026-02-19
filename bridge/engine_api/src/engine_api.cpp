@@ -12,6 +12,11 @@
 #include <memory>
 #include <vector>
 
+#if defined(__APPLE__)
+#include <objc/message.h>
+#include <objc/objc.h>
+#endif
+
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
@@ -862,6 +867,92 @@ engine_result_t engine_get_host_native_window(engine_handle_t handle,
 #endif
 }
 
+engine_result_t engine_get_host_native_view(engine_handle_t handle,
+                                            void** out_view_handle) {
+  if (out_view_handle == nullptr) {
+    return SetThreadErrorAndReturn(ENGINE_RESULT_INVALID_ARGUMENT,
+                                   "out_view_handle is null");
+  }
+  *out_view_handle = nullptr;
+
+  std::lock_guard<std::mutex> registry_guard(g_registry_mutex);
+  engine_handle_s* impl = nullptr;
+  auto result = ValidateHandleLocked(handle, &impl);
+  if (result != ENGINE_RESULT_OK) {
+    return result;
+  }
+
+  std::lock_guard<std::mutex> guard(impl->mutex);
+  result = ValidateHandleThreadLocked(impl);
+  if (result != ENGINE_RESULT_OK) {
+    return result;
+  }
+
+  if (!g_runtime_active || g_runtime_owner != handle) {
+    return SetHandleErrorAndReturnLocked(
+        impl,
+        ENGINE_RESULT_INVALID_STATE,
+        "engine_open_game must succeed before engine_get_host_native_view");
+  }
+
+#if defined(TARGET_OS_MAC) && TARGET_OS_MAC && !TARGET_OS_IPHONE
+  auto* director = cocos2d::Director::getInstance();
+  if (director == nullptr) {
+    return SetHandleErrorAndReturnLocked(
+        impl,
+        ENGINE_RESULT_INTERNAL_ERROR,
+        "cocos director is unavailable");
+  }
+  auto* gl_view = director->getOpenGLView();
+  if (gl_view == nullptr) {
+    return SetHandleErrorAndReturnLocked(
+        impl,
+        ENGINE_RESULT_INVALID_STATE,
+        "OpenGL view is unavailable");
+  }
+  void* cocoa_window = gl_view->getCocoaWindow();
+  if (cocoa_window == nullptr) {
+    return SetHandleErrorAndReturnLocked(
+        impl,
+        ENGINE_RESULT_INVALID_STATE,
+        "cocoa window is unavailable");
+  }
+
+#if defined(__APPLE__)
+  id ns_window = reinterpret_cast<id>(cocoa_window);
+  const SEL content_view_sel = sel_registerName("contentView");
+  if (content_view_sel == nullptr) {
+    return SetHandleErrorAndReturnLocked(
+        impl,
+        ENGINE_RESULT_INTERNAL_ERROR,
+        "contentView selector is unavailable");
+  }
+  id ns_view = ((id(*)(id, SEL))objc_msgSend)(ns_window, content_view_sel);
+  if (ns_view == nullptr) {
+    return SetHandleErrorAndReturnLocked(
+        impl,
+        ENGINE_RESULT_INVALID_STATE,
+        "cocoa contentView is unavailable");
+  }
+
+  *out_view_handle = reinterpret_cast<void*>(ns_view);
+  ClearHandleErrorLocked(impl);
+  SetThreadError(nullptr);
+  return ENGINE_RESULT_OK;
+#else
+  return SetHandleErrorAndReturnLocked(
+      impl,
+      ENGINE_RESULT_NOT_SUPPORTED,
+      "engine_get_host_native_view requires Objective-C runtime");
+#endif
+#else
+  return SetHandleErrorAndReturnLocked(
+      impl,
+      ENGINE_RESULT_NOT_SUPPORTED,
+      "engine_get_host_native_view is only supported on macOS runtime");
+#endif
+}
+
 engine_result_t engine_send_input(engine_handle_t handle,
                                   const engine_input_event_t* event) {
   if (event == nullptr) {
@@ -1346,6 +1437,34 @@ engine_result_t engine_get_host_native_window(engine_handle_t handle,
 
   SetHandleErrorLocked(impl,
                        "engine_get_host_native_window is not supported");
+  return ENGINE_RESULT_NOT_SUPPORTED;
+}
+
+engine_result_t engine_get_host_native_view(engine_handle_t handle,
+                                            void** out_view_handle) {
+  if (out_view_handle == nullptr) {
+    return SetThreadErrorAndReturn(ENGINE_RESULT_INVALID_ARGUMENT,
+                                   "out_view_handle is null");
+  }
+  *out_view_handle = nullptr;
+
+  std::lock_guard<std::mutex> registry_guard(g_registry_mutex);
+  engine_handle_s* impl = nullptr;
+  auto result = ValidateHandleLocked(handle, &impl);
+  if (result != ENGINE_RESULT_OK) {
+    return result;
+  }
+
+  std::lock_guard<std::mutex> guard(impl->mutex);
+  if (impl->state != ToStateValue(EngineState::kOpened) &&
+      impl->state != ToStateValue(EngineState::kPaused)) {
+    SetHandleErrorLocked(
+        impl,
+        "engine_open_game must succeed before engine_get_host_native_view");
+    return ENGINE_RESULT_INVALID_STATE;
+  }
+
+  SetHandleErrorLocked(impl, "engine_get_host_native_view is not supported");
   return ENGINE_RESULT_NOT_SUPPORTED;
 }
 

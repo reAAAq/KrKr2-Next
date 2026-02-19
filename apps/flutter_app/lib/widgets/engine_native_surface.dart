@@ -28,12 +28,14 @@ class EngineNativeSurface extends StatefulWidget {
 
 class _EngineNativeSurfaceState extends State<EngineNativeSurface> {
   Timer? _windowHandlePollTimer;
-  bool _windowHandleQueryInFlight = false;
+  bool _nativeHandleQueryInFlight = false;
   bool _attachInFlight = false;
   bool _attached = false;
+  bool _attachedAsNativeView = false;
 
   int _surfaceWidth = 0;
   int _surfaceHeight = 0;
+  int? _nativeViewHandle;
   int? _nativeWindowHandle;
   int? _platformViewId;
   double _devicePixelRatio = 1.0;
@@ -49,6 +51,7 @@ class _EngineNativeSurfaceState extends State<EngineNativeSurface> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.bridge != widget.bridge) {
       unawaited(_detachIfNeeded());
+      _nativeViewHandle = null;
       _nativeWindowHandle = null;
     }
     if (!widget.active && oldWidget.active) {
@@ -77,12 +80,12 @@ class _EngineNativeSurfaceState extends State<EngineNativeSurface> {
     _windowHandlePollTimer ??= Timer.periodic(
       const Duration(milliseconds: 300),
       (_) {
-        unawaited(_ensureNativeWindowHandle());
+        unawaited(_ensureNativeHandles());
         unawaited(_tryAttach());
       },
     );
 
-    unawaited(_ensureNativeWindowHandle());
+    unawaited(_ensureNativeHandles());
     unawaited(_tryAttach());
   }
 
@@ -117,35 +120,55 @@ class _EngineNativeSurfaceState extends State<EngineNativeSurface> {
     );
   }
 
-  Future<void> _ensureNativeWindowHandle() async {
+  Future<void> _ensureNativeHandles() async {
     if (!widget.active ||
         !Platform.isMacOS ||
-        _windowHandleQueryInFlight ||
-        _nativeWindowHandle != null) {
+        _nativeHandleQueryInFlight ||
+        (_nativeViewHandle != null || _nativeWindowHandle != null)) {
       return;
     }
 
-    _windowHandleQueryInFlight = true;
+    _nativeHandleQueryInFlight = true;
     try {
-      final int? handle = await widget.bridge.engineGetHostNativeWindow();
+      final int? nativeViewHandle = await widget.bridge
+          .engineGetHostNativeView();
+      final int? nativeWindowHandle = await widget.bridge
+          .engineGetHostNativeWindow();
       if (!mounted || !widget.active) {
         return;
       }
-      if (handle == null || handle == 0) {
+      final int? resolvedViewHandle =
+          nativeViewHandle != null && nativeViewHandle != 0
+          ? nativeViewHandle
+          : null;
+      final int? resolvedWindowHandle =
+          nativeWindowHandle != null && nativeWindowHandle != 0
+          ? nativeWindowHandle
+          : null;
+
+      if (resolvedViewHandle == null && resolvedWindowHandle == null) {
         return;
       }
 
       setState(() {
-        _nativeWindowHandle = handle;
+        _nativeViewHandle = resolvedViewHandle;
+        _nativeWindowHandle = resolvedWindowHandle;
       });
-      widget.onLog?.call(
-        'native window handle ready: 0x${handle.toRadixString(16)}',
-      );
+      if (resolvedViewHandle != null) {
+        widget.onLog?.call(
+          'native view handle ready: 0x${resolvedViewHandle.toRadixString(16)}',
+        );
+      }
+      if (resolvedWindowHandle != null) {
+        widget.onLog?.call(
+          'native window handle ready: 0x${resolvedWindowHandle.toRadixString(16)}',
+        );
+      }
       await _tryAttach();
     } catch (error) {
-      _reportError('query native window handle failed: $error');
+      _reportError('query native handles failed: $error');
     } finally {
-      _windowHandleQueryInFlight = false;
+      _nativeHandleQueryInFlight = false;
     }
   }
 
@@ -154,26 +177,45 @@ class _EngineNativeSurfaceState extends State<EngineNativeSurface> {
       return;
     }
     final int? viewId = _platformViewId;
+    final int? nativeViewHandle = _nativeViewHandle;
     final int? windowHandle = _nativeWindowHandle;
-    if (viewId == null || windowHandle == null || windowHandle == 0) {
+    if (viewId == null) {
+      return;
+    }
+    if ((nativeViewHandle == null || nativeViewHandle == 0) &&
+        (windowHandle == null || windowHandle == 0)) {
       return;
     }
 
     _attachInFlight = true;
     try {
-      await widget.bridge.attachNativeWindow(
-        viewId: viewId,
-        windowHandle: windowHandle,
-      );
+      if (nativeViewHandle != null && nativeViewHandle != 0) {
+        await widget.bridge.attachNativeView(
+          viewId: viewId,
+          viewHandle: nativeViewHandle,
+          windowHandle: windowHandle,
+        );
+      } else {
+        await widget.bridge.attachNativeWindow(
+          viewId: viewId,
+          windowHandle: windowHandle!,
+        );
+      }
       if (!mounted) {
         return;
       }
       setState(() {
         _attached = true;
+        _attachedAsNativeView =
+            nativeViewHandle != null && nativeViewHandle != 0;
       });
-      widget.onLog?.call('native window attached (viewId=$viewId)');
+      if (_attachedAsNativeView) {
+        widget.onLog?.call('native view attached (viewId=$viewId)');
+      } else {
+        widget.onLog?.call('native window attached (viewId=$viewId)');
+      }
     } catch (error) {
-      _reportError('attach native window failed: $error');
+      _reportError('attach native surface failed: $error');
     } finally {
       _attachInFlight = false;
     }
@@ -185,14 +227,21 @@ class _EngineNativeSurfaceState extends State<EngineNativeSurface> {
     }
     final int? viewId = _platformViewId;
     _attached = false;
+    final bool detachNativeView = _attachedAsNativeView;
+    _attachedAsNativeView = false;
     if (viewId == null) {
       return;
     }
     try {
-      await widget.bridge.detachNativeWindow(viewId: viewId);
-      widget.onLog?.call('native window detached (viewId=$viewId)');
+      if (detachNativeView) {
+        await widget.bridge.detachNativeView(viewId: viewId);
+        widget.onLog?.call('native view detached (viewId=$viewId)');
+      } else {
+        await widget.bridge.detachNativeWindow(viewId: viewId);
+        widget.onLog?.call('native window detached (viewId=$viewId)');
+      }
     } catch (error) {
-      _reportError('detach native window failed: $error');
+      _reportError('detach native surface failed: $error');
     }
   }
 
@@ -200,6 +249,7 @@ class _EngineNativeSurfaceState extends State<EngineNativeSurface> {
     setState(() {
       _platformViewId = viewId;
       _attached = false;
+      _attachedAsNativeView = false;
     });
     unawaited(_tryAttach());
   }
@@ -218,7 +268,7 @@ class _EngineNativeSurfaceState extends State<EngineNativeSurface> {
           final double dpr = MediaQuery.of(context).devicePixelRatio;
           unawaited(_ensureSurfaceSize(size, dpr));
           if (widget.active && Platform.isMacOS) {
-            unawaited(_ensureNativeWindowHandle());
+            unawaited(_ensureNativeHandles());
             unawaited(_tryAttach());
           }
 
@@ -261,8 +311,9 @@ class _EngineNativeSurfaceState extends State<EngineNativeSurface> {
                     child: Text(
                       'surface:${_surfaceWidth}x$_surfaceHeight  '
                       'view:${_platformViewId ?? "-"}  '
+                      'nativeView:${_nativeViewHandle != null ? "0x${_nativeViewHandle!.toRadixString(16)}" : "-"}  '
                       'handle:${_nativeWindowHandle != null ? "0x${_nativeWindowHandle!.toRadixString(16)}" : "-"}  '
-                      '${_attached ? "attached" : "pending"}',
+                      '${_attached ? (_attachedAsNativeView ? "attached:view" : "attached:window") : "pending"}',
                       style: const TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ),

@@ -21,6 +21,8 @@ class _FakeEngineBridge implements EngineBridge {
   int disposeTextureCalls = 0;
   int attachNativeWindowCalls = 0;
   int detachNativeWindowCalls = 0;
+  int attachNativeViewCalls = 0;
+  int detachNativeViewCalls = 0;
 
   @override
   bool get isFfiAvailable => true;
@@ -122,6 +124,9 @@ class _FakeEngineBridge implements EngineBridge {
   }
 
   @override
+  Future<int?> engineGetHostNativeView() async => null;
+
+  @override
   Future<int?> engineGetHostNativeWindow() async => null;
 
   @override
@@ -159,6 +164,20 @@ class _FakeEngineBridge implements EngineBridge {
     required int windowHandle,
   }) async {
     attachNativeWindowCalls += 1;
+  }
+
+  @override
+  Future<void> attachNativeView({
+    required int viewId,
+    required int viewHandle,
+    int? windowHandle,
+  }) async {
+    attachNativeViewCalls += 1;
+  }
+
+  @override
+  Future<void> detachNativeView({required int viewId}) async {
+    detachNativeViewCalls += 1;
   }
 
   @override

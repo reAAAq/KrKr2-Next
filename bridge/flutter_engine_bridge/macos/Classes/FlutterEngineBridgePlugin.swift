@@ -95,6 +95,11 @@ private final class EngineHostTexture: NSObject, FlutterTexture {
 private final class EngineNativeSurfaceView: NSView {
   private let viewId: Int64
   private let onDispose: (Int64) -> Void
+  private var nativeView: NSView?
+  private weak var nativeViewOwnerWindow: NSWindow?
+  private var nativeViewWindowPlaceholder: NSView?
+  private var nativeViewPinnedConstraints: [NSLayoutConstraint] = []
+  private var nativeViewOriginalTranslatesAutoresizingMask = true
   private var nativeWindow: NSWindow?
   private var hostWindowObservers: [NSObjectProtocol] = []
   private var clipViewObserver: NSObjectProtocol?
@@ -117,6 +122,7 @@ private final class EngineNativeSurfaceView: NSView {
   deinit {
     removeHostObservers()
     removeClipViewObserver()
+    detachNativeView()
     detachNativeWindow()
     onDispose(viewId)
   }
@@ -147,7 +153,74 @@ private final class EngineNativeSurfaceView: NSView {
     scheduleNativeWindowFrameUpdate()
   }
 
+  func attachNativeView(_ view: NSView, nativeWindow window: NSWindow?) {
+    if nativeView === view {
+      return
+    }
+
+    detachNativeWindow()
+    detachNativeView()
+
+    nativeView = view
+    nativeViewOwnerWindow = window ?? view.window
+    nativeViewOriginalTranslatesAutoresizingMask =
+      view.translatesAutoresizingMaskIntoConstraints
+    nativeViewWindowPlaceholder = nil
+
+    if let ownerWindow = nativeViewOwnerWindow, ownerWindow.contentView === view {
+      let placeholder = NSView(frame: view.frame)
+      placeholder.wantsLayer = true
+      placeholder.layer?.backgroundColor = NSColor.black.cgColor
+      ownerWindow.contentView = placeholder
+      nativeViewWindowPlaceholder = placeholder
+      ownerWindow.orderOut(nil)
+    }
+
+    view.removeFromSuperview()
+    view.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(view)
+
+    nativeViewPinnedConstraints = [
+      view.leadingAnchor.constraint(equalTo: leadingAnchor),
+      view.trailingAnchor.constraint(equalTo: trailingAnchor),
+      view.topAnchor.constraint(equalTo: topAnchor),
+      view.bottomAnchor.constraint(equalTo: bottomAnchor),
+    ]
+    NSLayoutConstraint.activate(nativeViewPinnedConstraints)
+    needsLayout = true
+  }
+
+  func detachNativeView() {
+    guard let nativeView else {
+      return
+    }
+
+    if !nativeViewPinnedConstraints.isEmpty {
+      NSLayoutConstraint.deactivate(nativeViewPinnedConstraints)
+      nativeViewPinnedConstraints.removeAll()
+    }
+    nativeView.removeFromSuperview()
+    nativeView.translatesAutoresizingMaskIntoConstraints =
+      nativeViewOriginalTranslatesAutoresizingMask
+
+    if let ownerWindow = nativeViewOwnerWindow {
+      if let placeholder = nativeViewWindowPlaceholder,
+        ownerWindow.contentView === placeholder
+      {
+        ownerWindow.contentView = nativeView
+      } else if ownerWindow.contentView == nil {
+        ownerWindow.contentView = nativeView
+      }
+      ownerWindow.orderOut(nil)
+    }
+
+    self.nativeView = nil
+    nativeViewOwnerWindow = nil
+    nativeViewWindowPlaceholder = nil
+  }
+
   func attachNativeWindow(_ window: NSWindow) {
+    detachNativeView()
     if nativeWindow === window {
       installHostObservers()
       updateClipViewObserver()
@@ -167,6 +240,8 @@ private final class EngineNativeSurfaceView: NSView {
   }
 
   func detachNativeWindow() {
+    removeHostObservers()
+    removeClipViewObserver()
     guard let nativeWindow else {
       return
     }
@@ -191,6 +266,9 @@ private final class EngineNativeSurfaceView: NSView {
   }
 
   private func scheduleNativeWindowFrameUpdate() {
+    guard nativeWindow != nil else {
+      return
+    }
     guard !frameSyncScheduled else {
       return
     }
@@ -231,7 +309,7 @@ private final class EngineNativeSurfaceView: NSView {
 
   private func installHostObservers() {
     removeHostObservers()
-    guard let hostWindow = window else {
+    guard nativeWindow != nil, let hostWindow = window else {
       return
     }
     let center = NotificationCenter.default
@@ -259,6 +337,10 @@ private final class EngineNativeSurfaceView: NSView {
   }
 
   private func updateClipViewObserver() {
+    guard nativeWindow != nil else {
+      removeClipViewObserver()
+      return
+    }
     let clipView = enclosingScrollView?.contentView
     if observedClipView === clipView {
       return
@@ -347,6 +429,7 @@ public class FlutterEngineBridgePlugin: NSObject, FlutterPlugin {
       registrar.textures.unregisterTexture(textureId)
     }
     for (_, nativeSurfaceView) in nativeSurfaceViews {
+      nativeSurfaceView.detachNativeView()
       nativeSurfaceView.detachNativeWindow()
     }
     nativeSurfaceViews.removeAll()
@@ -489,6 +572,104 @@ public class FlutterEngineBridgePlugin: NSObject, FlutterPlugin {
       let nativeWindow = Unmanaged<NSWindow>.fromOpaque(rawPointer)
         .takeUnretainedValue()
       nativeSurfaceView.attachNativeWindow(nativeWindow)
+      result(nil)
+
+    case "attachNativeView":
+      guard let args = call.arguments as? [String: Any],
+        let viewIdNumber = args["viewId"] as? NSNumber,
+        let viewHandleNumber = args["viewHandle"] as? NSNumber
+      else {
+        result(
+          FlutterError(
+            code: "invalid_args",
+            message: "attachNativeView requires viewId/viewHandle",
+            details: nil
+          )
+        )
+        return
+      }
+
+      let viewId = viewIdNumber.int64Value
+      guard let nativeSurfaceView = nativeSurfaceViews[viewId] else {
+        result(
+          FlutterError(
+            code: "surface_not_found",
+            message: "native surface view not found",
+            details: nil
+          )
+        )
+        return
+      }
+
+      let viewHandle = viewHandleNumber.uint64Value
+      guard let rawViewPointer = UnsafeRawPointer(bitPattern: UInt(viewHandle))
+      else {
+        result(
+          FlutterError(
+            code: "invalid_args",
+            message: "viewHandle is invalid",
+            details: nil
+          )
+        )
+        return
+      }
+      let nativeView = Unmanaged<NSView>.fromOpaque(rawViewPointer)
+        .takeUnretainedValue()
+      if nativeView === nativeSurfaceView {
+        result(
+          FlutterError(
+            code: "invalid_args",
+            message: "viewHandle cannot target native surface view itself",
+            details: nil
+          )
+        )
+        return
+      }
+
+      var nativeWindow: NSWindow?
+      if let windowHandleNumber = args["windowHandle"] as? NSNumber {
+        let windowHandle = windowHandleNumber.uint64Value
+        guard
+          let rawWindowPointer = UnsafeRawPointer(
+            bitPattern: UInt(windowHandle)
+          )
+        else {
+          result(
+            FlutterError(
+              code: "invalid_args",
+              message: "windowHandle is invalid",
+              details: nil
+            )
+          )
+          return
+        }
+        nativeWindow = Unmanaged<NSWindow>.fromOpaque(rawWindowPointer)
+          .takeUnretainedValue()
+      }
+
+      nativeSurfaceView.attachNativeView(nativeView, nativeWindow: nativeWindow)
+      result(nil)
+
+    case "detachNativeView":
+      guard let args = call.arguments as? [String: Any],
+        let viewIdNumber = args["viewId"] as? NSNumber
+      else {
+        result(
+          FlutterError(
+            code: "invalid_args",
+            message: "detachNativeView requires viewId",
+            details: nil
+          )
+        )
+        return
+      }
+
+      let viewId = viewIdNumber.int64Value
+      guard let nativeSurfaceView = nativeSurfaceViews[viewId] else {
+        result(nil)
+        return
+      }
+      nativeSurfaceView.detachNativeView()
       result(nil)
 
     case "detachNativeWindow":

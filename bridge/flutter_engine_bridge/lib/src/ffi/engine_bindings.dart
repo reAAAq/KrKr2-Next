@@ -198,6 +198,11 @@ typedef _EngineGetHostNativeWindowNative =
 typedef _EngineGetHostNativeWindowDart =
     int Function(Pointer<Void>, Pointer<Pointer<Void>>);
 
+typedef _EngineGetHostNativeViewNative =
+    Int32 Function(Pointer<Void>, Pointer<Pointer<Void>>);
+typedef _EngineGetHostNativeViewDart =
+    int Function(Pointer<Void>, Pointer<Pointer<Void>>);
+
 typedef _EngineSendInputNative =
     Int32 Function(Pointer<Void>, Pointer<EngineInputEvent>);
 typedef _EngineSendInputDart =
@@ -252,6 +257,7 @@ class EngineBindings {
             'engine_read_frame_rgba',
           ),
       engineGetHostNativeWindow = _lookupEngineGetHostNativeWindow(library),
+      engineGetHostNativeView = _lookupEngineGetHostNativeView(library),
       engineSendInput = library
           .lookupFunction<_EngineSendInputNative, _EngineSendInputDart>(
             'engine_send_input',
@@ -277,6 +283,8 @@ class EngineBindings {
   final int Function(Pointer<Void>, Pointer<Void>, int) engineReadFrameRgba;
   final int Function(Pointer<Void>, Pointer<Pointer<Void>>)?
   engineGetHostNativeWindow;
+  final int Function(Pointer<Void>, Pointer<Pointer<Void>>)?
+  engineGetHostNativeView;
   final int Function(Pointer<Void>, Pointer<EngineInputEvent>) engineSendInput;
   final Pointer<Utf8> Function(Pointer<Void>) engineGetLastError;
 
@@ -333,6 +341,18 @@ class EngineBindings {
         _EngineGetHostNativeWindowNative,
         _EngineGetHostNativeWindowDart
       >('engine_get_host_native_window');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static int Function(Pointer<Void>, Pointer<Pointer<Void>>)?
+  _lookupEngineGetHostNativeView(DynamicLibrary library) {
+    try {
+      return library.lookupFunction<
+        _EngineGetHostNativeViewNative,
+        _EngineGetHostNativeViewDart
+      >('engine_get_host_native_view');
     } catch (_) {
       return null;
     }

@@ -106,6 +106,11 @@ class FlutterEngineBridgeAdapter implements EngineBridge {
   }
 
   @override
+  Future<int?> engineGetHostNativeView() {
+    return _delegate.engineGetHostNativeView();
+  }
+
+  @override
   Future<int?> engineGetHostNativeWindow() {
     return _delegate.engineGetHostNativeWindow();
   }
@@ -165,6 +170,24 @@ class FlutterEngineBridgeAdapter implements EngineBridge {
       viewId: viewId,
       windowHandle: windowHandle,
     );
+  }
+
+  @override
+  Future<void> attachNativeView({
+    required int viewId,
+    required int viewHandle,
+    int? windowHandle,
+  }) {
+    return _delegate.attachNativeView(
+      viewId: viewId,
+      viewHandle: viewHandle,
+      windowHandle: windowHandle,
+    );
+  }
+
+  @override
+  Future<void> detachNativeView({required int viewId}) {
+    return _delegate.detachNativeView(viewId: viewId);
   }
 
   @override

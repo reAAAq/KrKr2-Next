@@ -68,4 +68,24 @@ class MethodChannelFlutterEngineBridge extends FlutterEngineBridgePlatform {
       <String, Object>{'viewId': viewId},
     );
   }
+
+  @override
+  Future<void> attachNativeView({
+    required int viewId,
+    required int viewHandle,
+    int? windowHandle,
+  }) async {
+    final args = <String, Object>{'viewId': viewId, 'viewHandle': viewHandle};
+    if (windowHandle != null) {
+      args['windowHandle'] = windowHandle;
+    }
+    await methodChannel.invokeMethod<void>('attachNativeView', args);
+  }
+
+  @override
+  Future<void> detachNativeView({required int viewId}) async {
+    await methodChannel.invokeMethod<void>('detachNativeView', <String, Object>{
+      'viewId': viewId,
+    });
+  }
 }

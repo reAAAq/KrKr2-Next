@@ -58,4 +58,16 @@ abstract class FlutterEngineBridgePlatform extends PlatformInterface {
   Future<void> detachNativeWindow({required int viewId}) {
     throw UnimplementedError('detachNativeWindow() has not been implemented.');
   }
+
+  Future<void> attachNativeView({
+    required int viewId,
+    required int viewHandle,
+    int? windowHandle,
+  }) {
+    throw UnimplementedError('attachNativeView() has not been implemented.');
+  }
+
+  Future<void> detachNativeView({required int viewId}) {
+    throw UnimplementedError('detachNativeView() has not been implemented.');
+  }
 }

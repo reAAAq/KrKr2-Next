@@ -30,6 +30,16 @@ class MockFlutterEngineBridgePlatform
   Future<void> detachNativeWindow({required int viewId}) async {}
 
   @override
+  Future<void> attachNativeView({
+    required int viewId,
+    required int viewHandle,
+    int? windowHandle,
+  }) async {}
+
+  @override
+  Future<void> detachNativeView({required int viewId}) async {}
+
+  @override
   Future<void> updateTextureRgba({
     required int textureId,
     required Uint8List rgba,
