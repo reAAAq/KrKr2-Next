@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 
 import 'engine/engine_bridge.dart';
 import 'engine/flutter_engine_bridge_adapter.dart';
+import 'widgets/engine_native_surface.dart';
 import 'widgets/engine_surface.dart';
 
 void main() {
   runApp(const FlutterShellApp());
 }
+
+enum SurfaceRenderMode { nativeView, texture, software }
 
 class FlutterShellApp extends StatelessWidget {
   const FlutterShellApp({
@@ -70,7 +73,7 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage>
   bool _busy = false;
   bool _tickInFlight = false;
   bool _isTicking = false;
-  bool _preferTextureSurface = true;
+  SurfaceRenderMode _surfaceMode = SurfaceRenderMode.texture;
   bool _autoPausedByLifecycle = false;
   bool _resumeTickLoopAfterLifecyclePause = false;
   bool _lifecycleTransitionInFlight = false;
@@ -661,234 +664,300 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage>
         _engineStatus == 'Opened' ||
         _engineStatus == 'Ticking' ||
         _engineStatus == 'Paused';
+    final Widget engineSurface = _surfaceMode == SurfaceRenderMode.nativeView
+        ? EngineNativeSurface(
+            bridge: _bridge,
+            active: isSurfaceActive,
+            onLog: (String message) {
+              _appendLog('surface: $message');
+            },
+            onError: (String message) {
+              if (!mounted) return;
+              setState(() {
+                _lastError = 'Last error: $message';
+              });
+              _appendLog('surface error: $message');
+            },
+          )
+        : EngineSurface(
+            bridge: _bridge,
+            active: isSurfaceActive,
+            preferTexture: _surfaceMode == SurfaceRenderMode.texture,
+            onLog: (String message) {
+              _appendLog('surface: $message');
+            },
+            onError: (String message) {
+              if (!mounted) return;
+              setState(() {
+                _lastError = 'Last error: $message';
+              });
+              _appendLog('surface error: $message');
+            },
+          );
+    final Widget infoSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Flutter shell ready.\nEngine bridge status:',
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Backend: $_backendInfo',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        Text('Platform: $_platformInfo', textAlign: TextAlign.center),
+        const SizedBox(height: 8),
+        Text(_libraryPathInfo, textAlign: TextAlign.center),
+        const SizedBox(height: 8),
+        Text(_ffiInitInfo, textAlign: TextAlign.center),
+        const SizedBox(height: 16),
+        Text(
+          'Engine status: $_engineStatus',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        Text('Tick count: $_tickCount', textAlign: TextAlign.center),
+        const SizedBox(height: 8),
+        Text('Last result: $_lastResult', textAlign: TextAlign.center),
+        const SizedBox(height: 8),
+        Text(_lastError, textAlign: TextAlign.center),
+      ],
+    );
+    final Widget surfaceSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        engineSurface,
+        const SizedBox(height: 8),
+        SegmentedButton<SurfaceRenderMode>(
+          segments: const [
+            ButtonSegment<SurfaceRenderMode>(
+              value: SurfaceRenderMode.nativeView,
+              label: Text('nativeView'),
+            ),
+            ButtonSegment<SurfaceRenderMode>(
+              value: SurfaceRenderMode.texture,
+              label: Text('texture'),
+            ),
+            ButtonSegment<SurfaceRenderMode>(
+              value: SurfaceRenderMode.software,
+              label: Text('software'),
+            ),
+          ],
+          selected: <SurfaceRenderMode>{_surfaceMode},
+          showSelectedIcon: false,
+          onSelectionChanged: _busy
+              ? null
+              : (Set<SurfaceRenderMode> selected) {
+                  if (selected.isEmpty) {
+                    return;
+                  }
+                  final SurfaceRenderMode next = selected.first;
+                  setState(() {
+                    _surfaceMode = next;
+                  });
+                  _appendLog('surface mode: ${next.name}');
+                },
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Tip: Click the surface to focus, then keyboard input will be forwarded.',
+          textAlign: TextAlign.center,
+        ),
+        if (_surfaceMode == SurfaceRenderMode.nativeView) ...[
+          const SizedBox(height: 4),
+          const Text(
+            'nativeView mode pins surface in a fixed viewport; controls scroll below.',
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ],
+    );
+    final Widget controlsSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _engineLibraryPathController,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            labelText: 'Engine library path (optional)',
+            hintText: '/tmp/engine_api_build/libengine_api.dylib',
+          ),
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: OutlinedButton(
+            onPressed: (_busy || _isTicking) ? null : _applyBridgePath,
+            child: const Text('Apply bridge path'),
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _gamePathController,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            labelText: 'Game path',
+            hintText: 'Enter game root path, e.g. .',
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: TextField(
+                controller: _optionKeyController,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Option key',
+                  hintText: 'fps_limit',
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _optionValueController,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Option value',
+                  hintText: '60',
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (_busy) const Center(child: CircularProgressIndicator()),
+        if (_busy) const SizedBox(height: 16),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          alignment: WrapAlignment.center,
+          children: [
+            ElevatedButton(
+              onPressed: _busy ? null : _loadBridgeInfo,
+              child: const Text('Refresh bridge info'),
+            ),
+            FilledButton(
+              onPressed: (_busy || _isTicking) ? null : _engineCreate,
+              child: const Text('engine_create'),
+            ),
+            OutlinedButton(
+              onPressed: (_busy || _isTicking) ? null : _engineOpenGame,
+              child: const Text('engine_open_game'),
+            ),
+            ElevatedButton(
+              onPressed: (_busy || _isTicking) ? null : _runOpenTickSmoke,
+              child: const Text('Run Open+Tick Smoke'),
+            ),
+            FilledButton.tonal(
+              onPressed: (_busy || _isTicking) ? _stopTickLoop : _startTickLoop,
+              child: Text(_isTicking ? 'Stop Tick' : 'Start Tick'),
+            ),
+            OutlinedButton(
+              onPressed: _busy ? null : _engineDestroy,
+              child: const Text('engine_destroy'),
+            ),
+            OutlinedButton(
+              onPressed: (_busy || _isTicking) ? null : _enginePause,
+              child: const Text('engine_pause'),
+            ),
+            OutlinedButton(
+              onPressed: (_busy || _isTicking) ? null : _engineResume,
+              child: const Text('engine_resume'),
+            ),
+            ElevatedButton(
+              onPressed: (_busy || _isTicking) ? null : _engineSetOption,
+              child: const Text('engine_set_option'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        const Divider(),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Text('Event logs', style: Theme.of(context).textTheme.titleMedium),
+            const Spacer(),
+            TextButton(
+              onPressed: _eventLogs.isEmpty ? null : _clearLogs,
+              child: const Text('Clear logs'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 220,
+          decoration: BoxDecoration(
+            border: Border.all(color: Theme.of(context).dividerColor),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: _eventLogs.isEmpty
+              ? const Center(child: Text('No logs yet'))
+              : ListView.builder(
+                  itemCount: _eventLogs.length,
+                  itemBuilder: (context, index) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      child: Text(
+                        _eventLogs[index],
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+    final bool pinNativeSurface = _surfaceMode == SurfaceRenderMode.nativeView;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Krkr2 Flutter Shell')),
-      body: SingleChildScrollView(
+      body: Padding(
         padding: const EdgeInsets.all(24),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 680),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'Flutter shell ready.\nEngine bridge status:',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Backend: $_backendInfo',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                Text('Platform: $_platformInfo', textAlign: TextAlign.center),
-                const SizedBox(height: 8),
-                Text(_libraryPathInfo, textAlign: TextAlign.center),
-                const SizedBox(height: 8),
-                Text(_ffiInitInfo, textAlign: TextAlign.center),
-                const SizedBox(height: 16),
-                Text(
-                  'Engine status: $_engineStatus',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                Text('Tick count: $_tickCount', textAlign: TextAlign.center),
-                const SizedBox(height: 8),
-                Text('Last result: $_lastResult', textAlign: TextAlign.center),
-                const SizedBox(height: 8),
-                Text(_lastError, textAlign: TextAlign.center),
-                const SizedBox(height: 20),
-                EngineSurface(
-                  bridge: _bridge,
-                  active: isSurfaceActive,
-                  preferTexture: _preferTextureSurface,
-                  onLog: (String message) {
-                    _appendLog('surface: $message');
-                  },
-                  onError: (String message) {
-                    if (!mounted) return;
-                    setState(() {
-                      _lastError = 'Last error: $message';
-                    });
-                    _appendLog('surface error: $message');
-                  },
-                ),
-                const SizedBox(height: 8),
-                SwitchListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Prefer Texture Surface'),
-                  subtitle: const Text(
-                    'Use native texture when available, fallback to software if unavailable.',
-                  ),
-                  value: _preferTextureSurface,
-                  onChanged: _busy
-                      ? null
-                      : (value) {
-                          setState(() {
-                            _preferTextureSurface = value;
-                          });
-                          _appendLog(
-                            'surface mode preference: ${value ? "texture" : "software"}',
-                          );
-                        },
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Tip: Click the surface to focus, then keyboard input will be forwarded.',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: _engineLibraryPathController,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Engine library path (optional)',
-                    hintText: '/tmp/engine_api_build/libengine_api.dylib',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: OutlinedButton(
-                    onPressed: (_busy || _isTicking) ? null : _applyBridgePath,
-                    child: const Text('Apply bridge path'),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _gamePathController,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Game path',
-                    hintText: 'Enter game root path, e.g. .',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: TextField(
-                        controller: _optionKeyController,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          labelText: 'Option key',
-                          hintText: 'fps_limit',
+            child: pinNativeSurface
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      surfaceSection,
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              infoSection,
+                              const SizedBox(height: 20),
+                              controlsSection,
+                            ],
+                          ),
                         ),
                       ),
+                    ],
+                  )
+                : SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        infoSection,
+                        const SizedBox(height: 20),
+                        surfaceSection,
+                        const SizedBox(height: 20),
+                        controlsSection,
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: _optionValueController,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          labelText: 'Option value',
-                          hintText: '60',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                if (_busy) const Center(child: CircularProgressIndicator()),
-                if (_busy) const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    ElevatedButton(
-                      onPressed: _busy ? null : _loadBridgeInfo,
-                      child: const Text('Refresh bridge info'),
-                    ),
-                    FilledButton(
-                      onPressed: (_busy || _isTicking) ? null : _engineCreate,
-                      child: const Text('engine_create'),
-                    ),
-                    OutlinedButton(
-                      onPressed: (_busy || _isTicking) ? null : _engineOpenGame,
-                      child: const Text('engine_open_game'),
-                    ),
-                    ElevatedButton(
-                      onPressed: (_busy || _isTicking)
-                          ? null
-                          : _runOpenTickSmoke,
-                      child: const Text('Run Open+Tick Smoke'),
-                    ),
-                    FilledButton.tonal(
-                      onPressed: (_busy || _isTicking)
-                          ? _stopTickLoop
-                          : _startTickLoop,
-                      child: Text(_isTicking ? 'Stop Tick' : 'Start Tick'),
-                    ),
-                    OutlinedButton(
-                      onPressed: _busy ? null : _engineDestroy,
-                      child: const Text('engine_destroy'),
-                    ),
-                    OutlinedButton(
-                      onPressed: (_busy || _isTicking) ? null : _enginePause,
-                      child: const Text('engine_pause'),
-                    ),
-                    OutlinedButton(
-                      onPressed: (_busy || _isTicking) ? null : _engineResume,
-                      child: const Text('engine_resume'),
-                    ),
-                    ElevatedButton(
-                      onPressed: (_busy || _isTicking)
-                          ? null
-                          : _engineSetOption,
-                      child: const Text('engine_set_option'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                const Divider(),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text(
-                      'Event logs',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: _eventLogs.isEmpty ? null : _clearLogs,
-                      child: const Text('Clear logs'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  height: 220,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Theme.of(context).dividerColor),
-                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: _eventLogs.isEmpty
-                      ? const Center(child: Text('No logs yet'))
-                      : ListView.builder(
-                          itemCount: _eventLogs.length,
-                          itemBuilder: (context, index) {
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              child: Text(
-                                _eventLogs[index],
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
           ),
         ),
       ),
