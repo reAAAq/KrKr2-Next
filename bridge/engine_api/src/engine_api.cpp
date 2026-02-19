@@ -19,7 +19,7 @@
 
 #include "environ/Application.h"
 #include "environ/EngineBootstrap.h"
-#include "environ/cocos2d/MainScene.h"
+#include "environ/MainScene.h"
 #include "base/SysInitIntf.h"
 #include "base/impl/SysInitImpl.h"
 #include "visual/ogl/ogl_common.h"
