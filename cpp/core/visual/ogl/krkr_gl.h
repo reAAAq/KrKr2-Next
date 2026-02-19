@@ -1,10 +1,10 @@
 /**
  * @file krkr_gl.h
- * @brief Lightweight OpenGL state cache layer — replaces Cocos2d-x ccGLStateCache.
+ * @brief Lightweight OpenGL state cache layer.
  *
  * Provides a thin wrapper around raw GL calls with basic state caching
- * to avoid redundant state changes. This is a drop-in replacement for
- * cocos2d::GL::* functions used in the KiriKiri2 rendering pipeline.
+ * to avoid redundant state changes. This is a drop-in replacement for the
+ * GL state cache functions used in the KiriKiri2 rendering pipeline.
  */
 #pragma once
 
@@ -21,25 +21,21 @@ namespace gl {
 
 /**
  * Bind a 2D texture on texture unit GL_TEXTURE0.
- * Equivalent to cocos2d::GL::bindTexture2D().
  */
 void BindTexture2D(GLuint textureId);
 
 /**
  * Bind a 2D texture on the specified texture unit (0-based index).
- * Equivalent to cocos2d::GL::bindTexture2DN().
  */
 void BindTexture2DN(unsigned int slot, GLuint textureId);
 
 /**
  * Activate a texture unit.
- * Equivalent to cocos2d::GL::activeTexture().
  */
 void ActiveTexture(GLenum textureUnit);
 
 /**
  * Delete a GL texture and invalidate it from the cache.
- * Equivalent to cocos2d::GL::deleteTexture().
  */
 void DeleteTexture(GLuint textureId);
 
@@ -49,7 +45,6 @@ void DeleteTexture(GLuint textureId);
 
 /**
  * Use a shader program (with cache).
- * Equivalent to cocos2d::GL::useProgram().
  */
 void UseProgram(GLuint program);
 
@@ -61,7 +56,6 @@ void UseProgram(GLuint program);
  * Enable vertex attribute arrays based on a bitmask.
  * Each bit i in `flags` means glEnableVertexAttribArray(i).
  * Previously enabled attributes not in the new mask are disabled.
- * Equivalent to cocos2d::GL::enableVertexAttribs().
  */
 void EnableVertexAttribs(unsigned int flags);
 
@@ -71,7 +65,6 @@ void EnableVertexAttribs(unsigned int flags);
 
 /**
  * Reset cached blend state so next blend call goes through.
- * Equivalent to cocos2d::GL::blendResetToCache().
  */
 void BlendResetToCache();
 
@@ -91,7 +84,7 @@ void InvalidateStateCache();
 
 /**
  * Register a callback to be invoked when the GL renderer is recreated
- * (e.g. after Android GL context loss). Replaces the Cocos2d-x
+ * (e.g. after Android GL context loss). Replaces the original
  * EVENT_RENDERER_RECREATED / EventListenerCustom mechanism.
  */
 void OnRendererRecreated(std::function<void()> callback);

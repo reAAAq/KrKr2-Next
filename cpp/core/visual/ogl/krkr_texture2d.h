@@ -1,8 +1,8 @@
 /**
  * @file krkr_texture2d.h
- * @brief Lightweight Texture2D replacement for Cocos2d-x CCTexture2D.
+ * @brief Lightweight Texture2D replacement for CCTexture2D.
  *
- * This class provides just enough of the cocos2d::Texture2D API
+ * This class provides just enough of the Texture2D API
  * that is actually used by RenderManager.cpp and RenderManager_ogl.cpp.
  * It is NOT a general-purpose texture class — only the methods actually
  * called in KiriKiri2 are implemented.
@@ -27,7 +27,7 @@
 namespace krkr {
 
 // ---------------------------------------------------------------------------
-// PixelFormat — maps from cocos2d::Texture2D::PixelFormat
+// PixelFormat — mirrors the original engine pixel format enum
 // ---------------------------------------------------------------------------
 enum class PixelFormat {
     RGBA8888,
@@ -41,7 +41,7 @@ enum class PixelFormat {
 };
 
 // ---------------------------------------------------------------------------
-// Size — minimal replacement for cocos2d::Size
+// Size — minimal Size struct for texture dimensions
 // ---------------------------------------------------------------------------
 struct Size {
     float width  = 0;
@@ -56,7 +56,7 @@ struct Size {
 inline const Size Size::ZERO = {0, 0};
 
 // ---------------------------------------------------------------------------
-// Texture2D — lightweight replacement for cocos2d::Texture2D
+// Texture2D — lightweight Texture2D for the krkr rendering pipeline
 //
 // Implements reference counting with autorelease() support.
 // autorelease() is a no-op that just returns this — the caller is
@@ -74,7 +74,7 @@ public:
 
     // --- Reference counting (simplified autorelease pool is not needed) ---
     void autorelease() {
-        // In Cocos2d-x, autorelease adds to a pool. Here we simply mark
+        // Originally, autorelease adds to a pool. Here we simply mark
         // that external code manages the lifetime. The caller (iTVPTexture2D)
         // handles Release() properly.
         _autoreleased = true;
@@ -82,7 +82,7 @@ public:
 
     // --- Initialization ---
     /**
-     * Initialize with pixel data. Compatible with cocos2d::Texture2D::initWithData.
+     * Initialize with pixel data.
      *
      * @param data       Pixel data pointer
      * @param dataLen    Byte length of data (unused, kept for API compat)
@@ -120,7 +120,7 @@ public:
     }
 
     /**
-     * Update a sub-region of the texture. Compatible with cocos2d::Texture2D::updateWithData.
+     * Update a sub-region of the texture.
      */
     bool updateWithData(const void *data, int offsetX, int offsetY,
                         int width, int height) {
@@ -144,7 +144,7 @@ public:
     const Size& getContentSize() const { return _contentSize; }
 
     // --- Fields exposed for AdapterTexture2D in RenderManager_ogl.cpp ---
-    // These mirror cocos2d::Texture2D protected members that AdapterTexture2D
+    // These mirror the original Texture2D protected members that AdapterTexture2D
     // directly accesses.
     GLuint _name = 0;
     Size   _contentSize;

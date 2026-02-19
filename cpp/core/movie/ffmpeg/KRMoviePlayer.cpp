@@ -12,7 +12,6 @@ extern "C" {
 #include "WaveMixer.h"
 #include "WindowImpl.h"
 #include "VideoOvlImpl.h"
-// [ANGLE Migration] YUVSprite removed — video overlay will use Flutter rendering.
 
 extern std::thread::id TVPMainThreadID;
 
@@ -230,8 +229,7 @@ int TVPMoviePlayer::AddVideoPicture(DVDVideoPicture &pic, int index) {
 VideoPresentOverlay::~VideoPresentOverlay() { ClearNode(); }
 
 void VideoPresentOverlay::ClearNode() {
-    // [ANGLE Migration] Cocos2d-x Node::removeFromParent removed.
-    // In the new architecture, overlay lifecycle is managed by Flutter.
+    // Overlay lifecycle is managed by Flutter.
     m_pRootNode = nullptr;
     m_pSprite = nullptr;
 }
@@ -256,18 +254,15 @@ void VideoPresentOverlay::PresentPicture(float dt) {
     if(!pic.rgba) {
         return;
     }
-    // [ANGLE Migration] Cocos2d-x YUVSprite rendering removed.
     // Video frames are decoded but display overlay is not rendered.
-    // This will be re-implemented via Flutter texture sharing in Phase 4.
+    // This will be re-implemented via Flutter texture sharing.
 }
 
 void KRMovie::VideoPresentOverlay::Play() {
-    // [ANGLE Migration] m_pSprite->setVisible removed (TVPYUVSprite no longer available)
     TVPMoviePlayer::Play();
 }
 
 void KRMovie::VideoPresentOverlay::Stop() {
-    // [ANGLE Migration] m_pSprite->setVisible removed (TVPYUVSprite no longer available)
     TVPMoviePlayer::Stop();
 }
 
@@ -281,10 +276,9 @@ MoviePlayerOverlay::~MoviePlayerOverlay() {
 void MoviePlayerOverlay::SetWindow(tTJSNI_Window *window) {
     ClearNode();
     m_pOwnerWindow = window;
-    // [ANGLE Migration] Cocos2d-x Node::create / addChild / schedule removed.
-    // Video overlay will be connected via Flutter rendering path in Phase 4.
+    // Video overlay will be connected via Flutter rendering path.
     spdlog::warn("MoviePlayerOverlay::SetWindow: video overlay display is "
-                 "currently disabled (cocos2d scene tree removed)");
+                 "currently disabled (scene tree removed)");
 }
 
 void MoviePlayerOverlay::BuildGraph(tTJSNI_VideoOverlay *callbackwin,
@@ -304,7 +298,6 @@ const tTVPRect &MoviePlayerOverlay::GetBounds() {
 
 void KRMovie::MoviePlayerOverlay::SetVisible(bool b) {
     VideoPresentOverlay::SetVisible(b);
-    // [ANGLE Migration] m_pRootNode->setVisible removed (OverlayNode is void*)
 }
 
 void MoviePlayerOverlay::OnPlayEvent(KRMovieEvent msg, void *p) {

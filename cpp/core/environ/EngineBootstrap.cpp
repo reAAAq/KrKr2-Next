@@ -2,7 +2,7 @@
  * @file EngineBootstrap.cpp
  * @brief Engine bootstrapper implementation.
  *
- * Replaces the Cocos2d-x AppDelegate for host-mode startup.
+ * Replaces the original AppDelegate for host-mode startup.
  * Creates an ANGLE EGL Pbuffer context for headless rendering.
  */
 

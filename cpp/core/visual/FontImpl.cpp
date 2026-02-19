@@ -230,7 +230,7 @@ void TVPInitFontNames() {
 #endif
 
         { // from internal storage
-            // Read font file using standard file I/O (replaces cocos2d::FileUtils)
+            // Read font file using standard file I/O
             auto tryReadFont = [](const std::string &path) -> std::vector<uint8_t> {
                 std::ifstream ifs(path, std::ios::binary | std::ios::ate);
                 if (!ifs.is_open()) return {};

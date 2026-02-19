@@ -1,6 +1,6 @@
 /**
  * @file EngineLoop.h
- * @brief Core engine loop driver — replaces the Cocos2d-x Scene-based
+ * @brief Core engine loop driver — replaces the original Scene-based
  *        MainScene with a clean, platform-agnostic loop + input dispatcher.
  *
  * Responsibilities:

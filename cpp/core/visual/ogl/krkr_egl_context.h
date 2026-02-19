@@ -2,7 +2,7 @@
  * @file krkr_egl_context.h
  * @brief Headless EGL context manager using ANGLE.
  *
- * Replaces GLFW window + Cocos2d-x GLViewImpl with an offscreen
+ * Replaces GLFW window + GLViewImpl with an offscreen
  * EGL Pbuffer surface, providing a pure headless OpenGL ES 2.0
  * context that works on all platforms via ANGLE:
  *   - macOS  → Metal backend

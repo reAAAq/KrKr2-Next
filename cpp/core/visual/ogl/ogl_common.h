@@ -36,7 +36,7 @@
 bool TVPCheckGLExtension(const std::string &extname);
 
 // ---------------------------------------------------------------------------
-// CHECK_GL_ERROR_DEBUG — replacement for cocos2d-x macro
+// CHECK_GL_ERROR_DEBUG — checks for GL errors in debug builds.
 // In debug builds, checks for GL errors after each call.
 // In release builds, this is a no-op.
 // ---------------------------------------------------------------------------

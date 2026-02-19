@@ -11,10 +11,8 @@ class iTVPSoundBuffer;
 
 class TVPYUVSprite;
 
-// [ANGLE Migration] Forward-declare a generic node pointer.
-// In the original code these were cocos2d::Sprite/Node; now they are
-// opaque pointers that will be wired up via the Flutter rendering path.
-// The movie overlay display will be re-implemented in Phase 4.
+// Forward-declare a generic node pointer.
+// These are opaque pointers wired up via the Flutter rendering path.
 using OverlayNode = void;
 
 NS_KRMOVIE_BEGIN

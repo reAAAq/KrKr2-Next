@@ -1,9 +1,9 @@
 /**
  * @file MainScene.h
- * @brief Stub MainScene — replaces the Cocos2d-x Scene-based MainScene.
+ * @brief Stub MainScene — replaces the original Scene-based MainScene.
  *
  * This is a lightweight engine loop driver that provides the same external
- * interface as the original TVPMainScene but without any Cocos2d-x dependency.
+ * interface as the original TVPMainScene but without any external framework dependency.
  * It drives Application::Run() each frame and manages game startup.
  */
 #pragma once
@@ -26,13 +26,12 @@ public:
 
     /**
      * Start the engine from the given game path.
-     * Replaces the original Cocos2d-x version that also set up UI nodes.
+     * Replaces the original version that also set up UI nodes.
      */
     bool startupFrom(const std::string &path);
 
     /**
      * Enable per-frame updates (called by engine_api after game open).
-     * In the original code this was cocos2d::Node::scheduleUpdate().
      */
     void scheduleUpdate();
 

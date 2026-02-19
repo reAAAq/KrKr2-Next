@@ -313,8 +313,7 @@ enum {
     orientLandscape,
 };
 
-// [ANGLE Migration] cocos2d::Node replaced with opaque pointer.
-// The scene-tree based rendering is removed; Flutter handles display.
+// Scene-tree based rendering is removed; Flutter handles display.
 using TVPOverlayNode = void;
 
 class iWindowLayer {

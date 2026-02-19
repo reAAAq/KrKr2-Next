@@ -306,9 +306,8 @@ void TVPExitApplication(int code) {
 }
 
 // const std::string &TVPGetInternalPreferencePath() {
-// 	static std::string
-// ret(cocos2d::FileUtils::getInstance()->getWritablePath()); 	return
-// ret;
+// 	static std::string ret;
+// 	return ret;
 // }
 //
 #if 0

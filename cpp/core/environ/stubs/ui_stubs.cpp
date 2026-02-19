@@ -1,7 +1,7 @@
 /**
  * @file ui_stubs.cpp
- * @brief Stub implementations for Cocos2d-x UI layer functions and
- *        platform functions that were previously provided by MainScene.cpp,
+ * @brief Stub implementations for UI layer functions and platform
+ *        functions that were previously provided by MainScene.cpp,
  *        AppDelegate.cpp, and the environ/ui/ directory.
  *
  * With the migration to Flutter-based UI, all of these are replaced by
@@ -27,7 +27,7 @@ class iWindowLayer;
 
 // ---------------------------------------------------------------------------
 // TVPInitUIExtension — originally in ui/extension/UIExtension.cpp
-// Registered custom cocos2d-x UI widgets (PageView, etc.)
+// Registered custom UI widgets (PageView, etc.)
 // ---------------------------------------------------------------------------
 void TVPInitUIExtension() {
     spdlog::debug("TVPInitUIExtension: stub (UI handled by Flutter)");
@@ -131,7 +131,7 @@ const std::vector<std::string> &TVPGetApplicationHomeDirectory() {
 }
 
 // ---------------------------------------------------------------------------
-// TVPCopyFile — originally in cocos2d/CustomFileUtils.cpp
+// TVPCopyFile — originally in CustomFileUtils.cpp
 // Copies a file from source to destination.
 // ---------------------------------------------------------------------------
 bool TVPCopyFile(const std::string &from, const std::string &to) {
@@ -167,7 +167,7 @@ void TVPShowPopMenu(tTJSNI_MenuItem *menu) {
 }
 
 // ---------------------------------------------------------------------------
-// TVPOpenPatchLibUrl — originally in cocos2d/AppDelegate.cpp
+// TVPOpenPatchLibUrl — originally in AppDelegate.cpp
 // Opens the URL for the patch library website.
 // ---------------------------------------------------------------------------
 void TVPOpenPatchLibUrl() {

@@ -508,7 +508,7 @@ static void _RestoreGLStatues() {
     }
     krkr::gl::BlendResetToCache();
     TVPSetRenderTarget(0);
-    // viewport will be set by the host rendering system (Flutter / Cocos2d-x)
+    // viewport will be set by the host rendering system (Flutter)
 }
 
 static tjs_uint8 *TVPShrinkXYBy2(tjs_uint *dpitch, const tjs_uint8 *src,
@@ -1019,7 +1019,7 @@ protected:
             _pixelFormat = krkr::PixelFormat::RGBA8888;
             _hasPremultipliedAlpha = false;
             _hasMipmaps = false;
-            // Removed: setGLProgram() — no longer needed without Cocos2d-x
+            // Removed: setGLProgram() — no longer needed
         }
 
         ~AdapterTexture2D() override {
@@ -2944,10 +2944,8 @@ protected:
         // IndividualConfigManager::GetInstance()->GetValueBool("ogl_dup_target",
         // true);
 
-        // [ANGLE Migration] Renderer recreated callback.
+        // Renderer recreated callback.
         // On Android, this rebuilds all shaders after GL context loss.
-        // Previously used cocos2d::EventListenerCustom + Director::EventDispatcher.
-        // Now registered via krkr::gl::OnRendererRecreated() callback.
         krkr::gl::OnRendererRecreated([this]() {
             tTVPOGLRenderMethod_Script::ClearCache();
             for(auto it : AllMethods) {

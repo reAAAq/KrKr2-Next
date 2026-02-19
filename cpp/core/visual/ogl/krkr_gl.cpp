@@ -1,6 +1,6 @@
 /**
  * @file krkr_gl.cpp
- * @brief Lightweight OpenGL state cache — replaces Cocos2d-x ccGLStateCache.
+ * @brief Lightweight OpenGL state cache.
  */
 
 #include "krkr_gl.h"
@@ -115,7 +115,7 @@ void EnableVertexAttribs(unsigned int flags) {
 
 void BlendResetToCache() {
     // Force GL to re-apply blend state on next draw.
-    // Cocos2d-x tracks blend src/dst factors; since the engine
+    // The original engine tracks blend src/dst factors; since the engine
     // always sets blend via raw glBlendFunc/glBlendFuncSeparate
     // before each draw, we just need to ensure the cache won't
     // suppress the next call. With raw GL calls this is a no-op

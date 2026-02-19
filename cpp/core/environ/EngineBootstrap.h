@@ -1,10 +1,10 @@
 /**
  * @file EngineBootstrap.h
- * @brief Engine bootstrapper — replaces Cocos2d-x AppDelegate for host-mode
+ * @brief Engine bootstrapper — replaces original AppDelegate for host-mode
  *        startup (e.g. Flutter FFI).
  *
  * Uses ANGLE EGL Pbuffer surface for headless OpenGL ES 2.0 rendering,
- * completely independent of Cocos2d-x Director/GLView/Scene.
+ * completely independent of any external framework.
  */
 #pragma once
 
