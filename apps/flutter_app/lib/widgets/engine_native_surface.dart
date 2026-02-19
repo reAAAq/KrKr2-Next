@@ -49,6 +49,7 @@ class _EngineNativeSurfaceState extends State<EngineNativeSurface> {
   int? _nativeWindowHandle;
   int? _platformViewId;
   double _devicePixelRatio = 1.0;
+  double _backingScaleFactor = 1.0;
 
   @override
   void initState() {
@@ -112,11 +113,15 @@ class _EngineNativeSurfaceState extends State<EngineNativeSurface> {
       return;
     }
     _devicePixelRatio = devicePixelRatio <= 0 ? 1.0 : devicePixelRatio;
-    final int width = (size.width * _devicePixelRatio).round().clamp(1, 16384);
-    final int height = (size.height * _devicePixelRatio).round().clamp(
-      1,
-      16384,
-    );
+    _backingScaleFactor = _devicePixelRatio;
+
+    // Always pass logical-point dimensions to the engine.  The C++ side
+    // now calls glview->setFrameSize() + setDesignResolutionSize() which
+    // expects the same coordinate space as a GLFW window size (logical
+    // points on macOS).  The OpenGL layer-backing handles the actual
+    // point → pixel scaling automatically.
+    final int width = size.width.round().clamp(1, 16384);
+    final int height = size.height.round().clamp(1, 16384);
     if (width == _surfaceWidth && height == _surfaceHeight) {
       return;
     }
@@ -231,16 +236,23 @@ class _EngineNativeSurfaceState extends State<EngineNativeSurface> {
       if (!mounted) {
         return;
       }
+      final bool isNativeViewAttach =
+          nativeViewHandle != null && nativeViewHandle != 0;
       setState(() {
         _attached = true;
-        _attachedAsNativeView =
-            nativeViewHandle != null && nativeViewHandle != 0;
+        _attachedAsNativeView = isNativeViewAttach;
       });
       if (_attachedAsNativeView) {
         widget.onLog?.call('native view attached (viewId=$viewId)');
       } else {
         widget.onLog?.call('native window attached (viewId=$viewId)');
       }
+
+      // After attach mode changes, force a surface size recalculation
+      // because native-view mode uses logical points while window mode
+      // uses physical pixels.
+      _surfaceWidth = 0;
+      _surfaceHeight = 0;
     } catch (error) {
       _reportError('attach native surface failed: $error');
     } finally {
@@ -326,14 +338,22 @@ class _EngineNativeSurfaceState extends State<EngineNativeSurface> {
           continue;
         }
 
+        // The native side (Swift) converts coordinates to physical
+        // pixels (localPoint * backingScaleFactor).  The engine now
+        // expects logical-point coordinates matching the surface size
+        // passed to engine_set_surface_size, so divide by the backing
+        // scale factor to convert back to logical points.
+        final double coordScale =
+            _backingScaleFactor > 0 ? _backingScaleFactor : 1.0;
+
         await _sendInputEvent(
           EngineInputEventData(
             type: type,
             timestampMicros: asInt(args['timestampMicros']) ?? 0,
-            x: asDouble(args['x']),
-            y: asDouble(args['y']),
-            deltaX: asDouble(args['deltaX']),
-            deltaY: asDouble(args['deltaY']),
+            x: asDouble(args['x']) / coordScale,
+            y: asDouble(args['y']) / coordScale,
+            deltaX: asDouble(args['deltaX']) / coordScale,
+            deltaY: asDouble(args['deltaY']) / coordScale,
             pointerId: asInt(args['pointerId']) ?? 0,
             button: asInt(args['button']) ?? 0,
           ),

@@ -888,6 +888,33 @@ engine_result_t engine_set_surface_size(engine_handle_t handle,
   impl->frame_stride_bytes = 0;
   impl->frame_rgba.clear();
   impl->frame_ready = false;
+
+  // If the cocos runtime is active, propagate the new surface size to the
+  // OpenGL view so that frame-size, design-resolution and viewport stay in
+  // sync with the actual display area provided by the host (e.g. Flutter
+  // container in native-view mode).
+  if (g_runtime_active && g_runtime_owner == handle) {
+    auto* director = cocos2d::Director::getInstance();
+    if (director != nullptr) {
+      auto* gl_view = director->getOpenGLView();
+      if (gl_view != nullptr) {
+        const cocos2d::Size current_frame = gl_view->getFrameSize();
+        const float new_w = static_cast<float>(width);
+        const float new_h = static_cast<float>(height);
+        if (std::abs(current_frame.width - new_w) > 0.5f ||
+            std::abs(current_frame.height - new_h) > 0.5f) {
+          // Replicate what onGLFWWindowSizeFunCallback does when the GLFW
+          // window is resized: update frame size, re-apply design resolution
+          // and reset the viewport.
+          gl_view->setFrameSize(new_w, new_h);
+          gl_view->setDesignResolutionSize(
+              960.0f, 640.0f, ResolutionPolicy::FIXED_WIDTH);
+          director->setViewport();
+        }
+      }
+    }
+  }
+
   ClearHandleErrorLocked(impl);
   SetThreadError(nullptr);
   return ENGINE_RESULT_OK;
