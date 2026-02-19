@@ -18,6 +18,47 @@ if(TARGET krkr2core AND TARGET krkr2plugin)
     target_link_libraries(engine_api PRIVATE krkr2core krkr2plugin)
 endif()
 
+# On Apple platforms, ANGLE GL symbols conflict with system OpenGL.framework.
+# Use -force_load to ensure ANGLE's libGLESv2 and libEGL are fully linked
+# so their GL/EGL functions take priority over system equivalents.
+if(APPLE AND NOT ANDROID)
+    find_package(unofficial-angle CONFIG QUIET)
+    if(unofficial-angle_FOUND)
+        # Get the actual .a file paths from the imported targets
+        get_target_property(_ANGLE_GLES_LOC unofficial::angle::libGLESv2 IMPORTED_LOCATION_DEBUG)
+        if(NOT _ANGLE_GLES_LOC)
+            get_target_property(_ANGLE_GLES_LOC unofficial::angle::libGLESv2 IMPORTED_LOCATION_RELEASE)
+        endif()
+        get_target_property(_ANGLE_EGL_LOC unofficial::angle::libEGL IMPORTED_LOCATION_DEBUG)
+        if(NOT _ANGLE_EGL_LOC)
+            get_target_property(_ANGLE_EGL_LOC unofficial::angle::libEGL IMPORTED_LOCATION_RELEASE)
+        endif()
+        get_target_property(_ANGLE_LIB_LOC unofficial::angle::libANGLE IMPORTED_LOCATION_DEBUG)
+        if(NOT _ANGLE_LIB_LOC)
+            get_target_property(_ANGLE_LIB_LOC unofficial::angle::libANGLE IMPORTED_LOCATION_RELEASE)
+        endif()
+
+        if(_ANGLE_GLES_LOC)
+            target_link_options(engine_api PRIVATE
+                "LINKER:-force_load,${_ANGLE_GLES_LOC}"
+            )
+            message(STATUS "engine_api: force_load ANGLE libGLESv2: ${_ANGLE_GLES_LOC}")
+        endif()
+        if(_ANGLE_EGL_LOC)
+            target_link_options(engine_api PRIVATE
+                "LINKER:-force_load,${_ANGLE_EGL_LOC}"
+            )
+            message(STATUS "engine_api: force_load ANGLE libEGL: ${_ANGLE_EGL_LOC}")
+        endif()
+        if(_ANGLE_LIB_LOC)
+            target_link_options(engine_api PRIVATE
+                "LINKER:-force_load,${_ANGLE_LIB_LOC}"
+            )
+            message(STATUS "engine_api: force_load ANGLE libANGLE: ${_ANGLE_LIB_LOC}")
+        endif()
+    endif()
+endif()
+
 set_target_properties(engine_api PROPERTIES
     OUTPUT_NAME "engine_api"
 )
