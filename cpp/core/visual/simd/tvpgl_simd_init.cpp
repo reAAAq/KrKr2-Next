@@ -143,14 +143,14 @@ void TVPGL_SIMD_Init() {
     TVPFillARGB_NC     = TVPFillARGB_hwy;
 
     // =====================================================================
-    // Phase 2: Alpha Blend (fixed: signed i16 arithmetic)
+    // Phase 2: Alpha Blend (fixed: unsigned u16 arithmetic)
     // =====================================================================
     TVPAlphaBlend       = TVPAlphaBlend_hwy;
     TVPAlphaBlend_HDA   = TVPAlphaBlend_HDA_hwy;
     TVPAlphaBlend_o     = TVPAlphaBlend_o_hwy;
     TVPAlphaBlend_HDA_o = TVPAlphaBlend_HDA_o_hwy;
 
-    // Phase 2: Add/Sub/Mul/Screen Blend (no i16 bug - these use SaturatedAdd/Sub/Mul)
+    // Phase 2: Add/Sub/Mul/Screen Blend (safe - uses SaturatedAdd/Sub/Mul)
     TVPAddBlend       = TVPAddBlend_hwy;
     TVPAddBlend_HDA   = TVPAddBlend_HDA_hwy;
     TVPAddBlend_o     = TVPAddBlend_o_hwy;
@@ -171,25 +171,31 @@ void TVPGL_SIMD_Init() {
     TVPScreenBlend_o     = TVPScreenBlend_o_hwy;
     TVPScreenBlend_HDA_o = TVPScreenBlend_HDA_o_hwy;
 
-    // Phase 2: Const Alpha Blend (fixed: signed i16 arithmetic)
+    // Phase 2: Const Alpha Blend (only truly SIMD variants)
     TVPConstAlphaBlend     = TVPConstAlphaBlend_hwy;
     TVPConstAlphaBlend_HDA = TVPConstAlphaBlend_HDA_hwy;
-    TVPConstAlphaBlend_d   = TVPConstAlphaBlend_d_hwy;
-    TVPConstAlphaBlend_a   = TVPConstAlphaBlend_a_hwy;
+    // NOTE: _d and _a variants are pure scalar with table lookups -
+    // keep original C (Duff's device optimized) for better performance
+    // TVPConstAlphaBlend_d   = TVPConstAlphaBlend_d_hwy;
+    // TVPConstAlphaBlend_a   = TVPConstAlphaBlend_a_hwy;
 
-    // Phase 2: Additive Alpha Blend (no i16 bug - uses SaturatedAdd)
+    // Phase 2: Additive Alpha Blend (truly SIMD variants only)
     TVPAdditiveAlphaBlend       = TVPAdditiveAlphaBlend_hwy;
     TVPAdditiveAlphaBlend_HDA   = TVPAdditiveAlphaBlend_HDA_hwy;
     TVPAdditiveAlphaBlend_o     = TVPAdditiveAlphaBlend_o_hwy;
     TVPAdditiveAlphaBlend_HDA_o = TVPAdditiveAlphaBlend_HDA_o_hwy;
-    TVPAdditiveAlphaBlend_a     = TVPAdditiveAlphaBlend_a_hwy;
-    TVPAdditiveAlphaBlend_ao    = TVPAdditiveAlphaBlend_ao_hwy;
+    // NOTE: _a and _ao are pure scalar - keep original C
+    // TVPAdditiveAlphaBlend_a     = TVPAdditiveAlphaBlend_a_hwy;
+    // TVPAdditiveAlphaBlend_ao    = TVPAdditiveAlphaBlend_ao_hwy;
 
-    // Phase 2: Alpha Color Mat (fixed: signed i16 arithmetic)
+    // Phase 2: Alpha Color Mat (truly SIMD)
     TVPAlphaColorMat = TVPAlphaColorMat_hwy;
 
     // =====================================================================
-    // Phase 3: Photoshop blend modes (fixed: signed i16 in PsApplyAlpha)
+    // Phase 3: Photoshop blend modes
+    // Only register modes that have true SIMD blend cores.
+    // Table-based modes (SoftLight, ColorDodge, ColorBurn, ColorDodge5, Diff5)
+    // are pure scalar - keep original C for better performance.
     // =====================================================================
 #define REGISTER_PS_BLEND_4V(Name)                                            \
     TVPPs##Name##Blend       = TVPPs##Name##Blend_hwy;                        \
@@ -208,55 +214,62 @@ void TVPGL_SIMD_Init() {
     REGISTER_PS_BLEND_4V(Overlay)
     REGISTER_PS_BLEND_4V(HardLight)
     REGISTER_PS_BLEND_4V(Exclusion)
-    REGISTER_PS_BLEND_4V(SoftLight)
-    REGISTER_PS_BLEND_4V(ColorDodge)
-    REGISTER_PS_BLEND_4V(ColorBurn)
-    REGISTER_PS_BLEND_4V(ColorDodge5)
-    REGISTER_PS_BLEND_4V(Diff5)
+    // Table-based modes: keep original C (pure scalar, no SIMD benefit)
+    // REGISTER_PS_BLEND_4V(SoftLight)
+    // REGISTER_PS_BLEND_4V(ColorDodge)
+    // REGISTER_PS_BLEND_4V(ColorBurn)
+    // REGISTER_PS_BLEND_4V(ColorDodge5)
+    // REGISTER_PS_BLEND_4V(Diff5)
 
 #undef REGISTER_PS_BLEND_4V
 
     // =====================================================================
-    // Phase 4: Convert functions (fixed: uses TVPDivTable for AdditiveToAlpha)
+    // Phase 4: Convert functions (only truly SIMD ones)
     // =====================================================================
-    TVPConvertAdditiveAlphaToAlpha = TVPConvertAdditiveAlphaToAlpha_hwy;
+    // NOTE: ConvertAdditiveAlphaToAlpha is pure scalar (table lookup) - keep C
+    // TVPConvertAdditiveAlphaToAlpha = TVPConvertAdditiveAlphaToAlpha_hwy;
     TVPConvertAlphaToAdditiveAlpha = TVPConvertAlphaToAdditiveAlpha_hwy;
-    TVPConvert24BitTo32Bit         = TVPConvert24BitTo32Bit_hwy;
-    TVPConvert32BitTo24Bit         = TVPConvert32BitTo24Bit_hwy;
+    // NOTE: 24/32 bit convert are pure scalar - keep C
+    // TVPConvert24BitTo32Bit         = TVPConvert24BitTo32Bit_hwy;
+    // TVPConvert32BitTo24Bit         = TVPConvert32BitTo24Bit_hwy;
     TVPReverseRGB                  = TVPReverseRGB_hwy;
 
     // =====================================================================
-    // Phase 4: Misc functions (fixed: ConstColorAlphaBlend uses signed i16)
+    // Phase 4: Misc functions (only truly SIMD ones)
     // =====================================================================
-    TVPDoGrayScale         = TVPDoGrayScale_hwy;
+    // NOTE: DoGrayScale, Reverse32/8, BindMaskToMain, RemoveConstOpacity
+    // are pure scalar loops - keep original C (Duff's device optimized)
+    // TVPDoGrayScale         = TVPDoGrayScale_hwy;
     TVPSwapLine32          = TVPSwapLine32_hwy;
     TVPSwapLine8           = TVPSwapLine8_hwy;
-    TVPReverse32           = TVPReverse32_hwy;
-    TVPReverse8            = TVPReverse8_hwy;
+    // TVPReverse32           = TVPReverse32_hwy;
+    // TVPReverse8            = TVPReverse8_hwy;
     TVPMakeAlphaFromKey    = TVPMakeAlphaFromKey_hwy;
     TVPCopyMask            = TVPCopyMask_hwy;
     TVPCopyColor           = TVPCopyColor_hwy;
     TVPFillColor           = TVPFillColor_hwy;
     TVPFillMask            = TVPFillMask_hwy;
-    TVPBindMaskToMain      = TVPBindMaskToMain_hwy;
+    // TVPBindMaskToMain      = TVPBindMaskToMain_hwy;
     TVPConstColorAlphaBlend = TVPConstColorAlphaBlend_hwy;
-    TVPRemoveConstOpacity  = TVPRemoveConstOpacity_hwy;
+    // TVPRemoveConstOpacity  = TVPRemoveConstOpacity_hwy;
 
     // =====================================================================
-    // Phase 4: Blur functions (fixed: DoBoxBlurAvg uses 4-element running
-    // sum, output-first, half_n rounding, _d uses TVPDivTable.
-    // ChBlurMulCopy65 uses >>18, ChBlurAddMulCopy65 accumulates+saturates.)
+    // Phase 4: Blur functions
+    // Only AddSubVertSum has true SIMD. DoBoxBlurAvg and ChBlur* are
+    // pure scalar - keep original C for better performance.
     // =====================================================================
     TVPAddSubVertSum16     = TVPAddSubVertSum16_hwy;
     TVPAddSubVertSum16_d   = TVPAddSubVertSum16_d_hwy;
     TVPAddSubVertSum32     = TVPAddSubVertSum32_hwy;
     TVPAddSubVertSum32_d   = TVPAddSubVertSum32_d_hwy;
-    TVPDoBoxBlurAvg16      = TVPDoBoxBlurAvg16_hwy;
-    TVPDoBoxBlurAvg16_d    = TVPDoBoxBlurAvg16_d_hwy;
-    TVPDoBoxBlurAvg32      = TVPDoBoxBlurAvg32_hwy;
-    TVPDoBoxBlurAvg32_d    = TVPDoBoxBlurAvg32_d_hwy;
-    TVPChBlurMulCopy65     = TVPChBlurMulCopy65_hwy;
-    TVPChBlurAddMulCopy65  = TVPChBlurAddMulCopy65_hwy;
-    TVPChBlurMulCopy       = TVPChBlurMulCopy_hwy;
-    TVPChBlurAddMulCopy    = TVPChBlurAddMulCopy_hwy;
+    // NOTE: DoBoxBlurAvg* are sequential scalar - keep original C
+    // TVPDoBoxBlurAvg16      = TVPDoBoxBlurAvg16_hwy;
+    // TVPDoBoxBlurAvg16_d    = TVPDoBoxBlurAvg16_d_hwy;
+    // TVPDoBoxBlurAvg32      = TVPDoBoxBlurAvg32_hwy;
+    // TVPDoBoxBlurAvg32_d    = TVPDoBoxBlurAvg32_d_hwy;
+    // NOTE: ChBlur* are pure scalar - keep original C
+    // TVPChBlurMulCopy65     = TVPChBlurMulCopy65_hwy;
+    // TVPChBlurAddMulCopy65  = TVPChBlurAddMulCopy65_hwy;
+    // TVPChBlurMulCopy       = TVPChBlurMulCopy_hwy;
+    // TVPChBlurAddMulCopy    = TVPChBlurAddMulCopy_hwy;
 }

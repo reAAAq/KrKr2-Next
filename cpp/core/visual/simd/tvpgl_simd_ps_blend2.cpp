@@ -69,11 +69,13 @@ static HWY_INLINE hn::Vec<hn::ScalableTag<uint8_t>> PsApplyAlpha(
     auto s_hi = hn::PromoteUpperTo(d16, vs_blended);
     auto d_hi = hn::PromoteUpperTo(d16, vd);
     auto a_hi = hn::PromoteUpperTo(d16, va);
-    // result = (s * a + d * (255 - a)) >> 8, all unsigned, no overflow
+    // result = (s * a >> 8) + (d * (255 - a) >> 8), split to avoid u16 overflow
     auto inv_a_lo = hn::Sub(v255, a_lo);
     auto inv_a_hi = hn::Sub(v255, a_hi);
-    auto r_lo = hn::ShiftRight<8>(hn::Add(hn::Mul(s_lo, a_lo), hn::Mul(d_lo, inv_a_lo)));
-    auto r_hi = hn::ShiftRight<8>(hn::Add(hn::Mul(s_hi, a_hi), hn::Mul(d_hi, inv_a_hi)));
+    auto r_lo = hn::Add(hn::ShiftRight<8>(hn::Mul(s_lo, a_lo)),
+                        hn::ShiftRight<8>(hn::Mul(d_lo, inv_a_lo)));
+    auto r_hi = hn::Add(hn::ShiftRight<8>(hn::Mul(s_hi, a_hi)),
+                        hn::ShiftRight<8>(hn::Mul(d_hi, inv_a_hi)));
     return hn::OrderedDemote2To(d8, r_lo, r_hi);
 }
 

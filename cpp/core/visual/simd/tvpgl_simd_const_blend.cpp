@@ -23,8 +23,8 @@ namespace HWY_NAMESPACE {
 
 namespace hn = hwy::HWY_NAMESPACE;
 
-// Blend: result = (s * a + d * (255 - a)) >> 8
-// All u16 arithmetic, no overflow (max product 255*255=65025 < 65535)
+// Blend: result = (s * a >> 8) + (d * (255 - a) >> 8)
+// Split >>8 before add to avoid u16 overflow (s*a + d*inv_a can exceed 65535)
 static HWY_INLINE auto BlendChannel(
     hn::ScalableTag<uint16_t> d16,
     hn::Vec<hn::ScalableTag<uint16_t>> s,
@@ -33,7 +33,8 @@ static HWY_INLINE auto BlendChannel(
     -> hn::Vec<hn::ScalableTag<uint16_t>> {
     const auto v255 = hn::Set(d16, static_cast<uint16_t>(255));
     auto inv_a = hn::Sub(v255, a);
-    return hn::ShiftRight<8>(hn::Add(hn::Mul(s, a), hn::Mul(d, inv_a)));
+    return hn::Add(hn::ShiftRight<8>(hn::Mul(s, a)),
+                   hn::ShiftRight<8>(hn::Mul(d, inv_a)));
 }
 
 void ConstAlphaBlend_HWY(tjs_uint32 *dest, const tjs_uint32 *src,

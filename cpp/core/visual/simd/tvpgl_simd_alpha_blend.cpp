@@ -22,13 +22,13 @@ namespace HWY_NAMESPACE {
 namespace hn = hwy::HWY_NAMESPACE;
 
 /*
- * Core alpha blend helper: result = (s * a + d * (255 - a)) >> 8
+ * Core alpha blend helper: result = (s * a) >> 8 + (d * (255 - a)) >> 8
  * Uses UNSIGNED u16 arithmetic throughout. Each product s*a or d*inv_a
  * fits in u16 (max 255*255=65025 < 65535). After >>8, each term <=254.
- * Sum <= 508 but in practice <= 255; OrderedDemote2To saturates to 255.
+ * Sum <=508 fits u16; OrderedDemote2To saturates to 255.
  *
- * Input: u16 vectors (promoted from u8), range [0, 255]
- * Output: u16 vectors, range [0, 255]
+ * IMPORTANT: We must >>8 each product BEFORE adding, to avoid u16 overflow
+ * (s*a + d*inv_a can reach 130050 > 65535).
  */
 static HWY_INLINE auto BlendChannel(
     hn::ScalableTag<uint16_t> d16,
@@ -38,8 +38,9 @@ static HWY_INLINE auto BlendChannel(
     -> hn::Vec<hn::ScalableTag<uint16_t>> {
     const auto v255 = hn::Set(d16, static_cast<uint16_t>(255));
     auto inv_a = hn::Sub(v255, a);  // 255 - a
-    // (s * a + d * (255 - a)) >> 8
-    return hn::ShiftRight<8>(hn::Add(hn::Mul(s, a), hn::Mul(d, inv_a)));
+    // (s * a >> 8) + (d * (255 - a) >> 8) — split to avoid u16 overflow
+    return hn::Add(hn::ShiftRight<8>(hn::Mul(s, a)),
+                   hn::ShiftRight<8>(hn::Mul(d, inv_a)));
 }
 
 void AlphaBlend_HWY(tjs_uint32 *dest, const tjs_uint32 *src, tjs_int len) {

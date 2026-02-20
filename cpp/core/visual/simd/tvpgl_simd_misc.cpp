@@ -269,9 +269,12 @@ void ConstColorAlphaBlend_HWY(tjs_uint32 *dest, tjs_int len,
         auto c_hi = hn::PromoteUpperTo(d16, vcolor);
         auto d_hi = hn::PromoteUpperTo(d16, vd);
 
-        // result = (color * opa + dest * (255 - opa)) >> 8
-        auto r_lo = hn::ShiftRight<8>(hn::Add(hn::Mul(c_lo, vopa16), hn::Mul(d_lo, vinv_opa)));
-        auto r_hi = hn::ShiftRight<8>(hn::Add(hn::Mul(c_hi, vopa16), hn::Mul(d_hi, vinv_opa)));
+        // result = (color * opa >> 8) + (dest * (255 - opa) >> 8)
+        // Split >>8 before add to avoid u16 overflow
+        auto r_lo = hn::Add(hn::ShiftRight<8>(hn::Mul(c_lo, vopa16)),
+                            hn::ShiftRight<8>(hn::Mul(d_lo, vinv_opa)));
+        auto r_hi = hn::Add(hn::ShiftRight<8>(hn::Mul(c_hi, vopa16)),
+                            hn::ShiftRight<8>(hn::Mul(d_hi, vinv_opa)));
 
         auto result = hn::OrderedDemote2To(d8, r_lo, r_hi);
         hn::StoreU(result, d8, reinterpret_cast<uint8_t*>(dest + i));
