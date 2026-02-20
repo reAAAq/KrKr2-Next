@@ -4939,3 +4939,10 @@ public:
 };
 
 REGISTER_RENDERMANAGER(TVPRenderManager_OpenGL, opengl);
+
+// Explicit registration function to force linker to include this translation unit
+// (static library dead-stripping would otherwise discard the auto-register global)
+void TVPForceRegisterOpenGLRenderManager() {
+    // intentionally empty – the REGISTER_RENDERMANAGER static initializer above
+    // does the real work; this function just needs to be referenced from another TU.
+}
