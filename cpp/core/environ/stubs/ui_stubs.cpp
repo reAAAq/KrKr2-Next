@@ -231,7 +231,16 @@ public:
         glUseProgram(0);
         glBindTexture(GL_TEXTURE_2D, 0);
 
-        glFinish(); // Ensure rendering is complete before readback
+        // In IOSurface mode, glFlush() is sufficient — the IOSurface
+        // has its own GPU-GPU synchronization mechanism, so we don't
+        // need to stall the CPU waiting for GPU completion.
+        // In Pbuffer mode, glFinish() is required because the legacy
+        // path uses glReadPixels which needs GPU to be done.
+        if (egl.HasIOSurface()) {
+            glFlush();
+        } else {
+            glFinish();
+        }
     }
 
     void InvalidateClose() override {
