@@ -204,5 +204,8 @@ class FlutterEngineBridgeAdapter implements EngineBridge {
   }
 
   @override
+  String engineGetRendererInfo() => _delegate.engineGetRendererInfo();
+
+  @override
   String engineGetLastError() => _delegate.engineGetLastError();
 }

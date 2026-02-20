@@ -332,6 +332,27 @@ class EngineFfiBridge {
     }
   }
 
+  String getRendererInfo() {
+    if (_handle == nullptr) {
+      return '';
+    }
+    const int bufferSize = 512;
+    final buffer = calloc<Uint8>(bufferSize);
+    try {
+      final result = _bindings.engineGetRendererInfo(
+        _handle,
+        buffer.cast<Utf8>(),
+        bufferSize,
+      );
+      if (result != kEngineResultOk) {
+        return '';
+      }
+      return buffer.cast<Utf8>().toDartString();
+    } finally {
+      calloc.free(buffer);
+    }
+  }
+
   String lastError() {
     final errorPtr = _bindings.engineGetLastError(_handle);
     if (errorPtr == nullptr) {

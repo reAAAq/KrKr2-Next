@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../engine/engine_bridge.dart';
 import '../engine/flutter_engine_bridge_adapter.dart';
 import '../widgets/engine_surface.dart';
+import '../widgets/performance_overlay.dart';
 
 /// The game running page — full-screen engine surface with auto-start flow.
 class GamePage extends StatefulWidget {
@@ -32,12 +34,20 @@ class _GamePageState extends State<GamePage>
   final GlobalKey<EngineSurfaceState> _surfaceKey =
       GlobalKey<EngineSurfaceState>();
 
+  static const String _perfOverlayKey = 'krkr2_perf_overlay';
+
   Ticker? _ticker;
   bool _tickInFlight = false;
   bool _isTicking = false;
   bool _autoPausedByLifecycle = false;
   bool _resumeTickAfterLifecycle = false;
   bool _lifecycleTransitionInFlight = false;
+
+  // Performance overlay
+  bool _showPerfOverlay = false;
+  String _rendererInfo = '';
+  final GlobalKey<EnginePerformanceOverlayState> _perfOverlayKey0 =
+      GlobalKey<EnginePerformanceOverlayState>();
 
   // State
   _EnginePhase _phase = _EnginePhase.initializing;
@@ -48,20 +58,31 @@ class _GamePageState extends State<GamePage>
   final List<String> _logs = [];
   static const int _maxLogs = 80;
 
+  // ScrollController for boot log auto-scroll
+  final ScrollController _bootLogScrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _bridge = widget.engineBridgeBuilder(ffiLibraryPath: widget.ffiLibraryPath);
+    _loadPerfOverlaySetting();
     _log('Initializing engine for: ${widget.gamePath}');
     if (widget.ffiLibraryPath != null) {
       _log('Using custom dylib: ${widget.ffiLibraryPath}');
     }
-    unawaited(_autoStart());
+    // Defer engine startup until after the first frame is rendered,
+    // so the boot-log UI is visible before blocking FFI calls begin.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_autoStart());
+      }
+    });
   }
 
   @override
   void dispose() {
+    _bootLogScrollController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _stopTickLoop(notify: false);
     unawaited(_bridge.engineDestroy());
@@ -90,6 +111,10 @@ class _GamePageState extends State<GamePage>
     setState(() => _phase = _EnginePhase.creating);
     _log('engine_create...');
 
+    // Yield to let the UI paint the current log state before the
+    // synchronous FFI call blocks the main thread.
+    await Future<void>.delayed(Duration.zero);
+
     final int createResult = await _bridge.engineCreate();
     if (createResult != _engineResultOk) {
       _fail('engine_create failed: result=$createResult, '
@@ -101,6 +126,11 @@ class _GamePageState extends State<GamePage>
     if (!mounted) return;
     setState(() => _phase = _EnginePhase.opening);
     _log('engine_open_game(${widget.gamePath})...');
+    _log('Starting application — this may take a moment...');
+
+    // Yield again so the "Opening game..." log line is painted before
+    // the heavy engine_open_game call blocks the thread.
+    await Future<void>.delayed(Duration.zero);
 
     final int openResult = await _bridge.engineOpenGame(widget.gamePath);
     if (openResult != _engineResultOk) {
@@ -112,6 +142,7 @@ class _GamePageState extends State<GamePage>
 
     if (!mounted) return;
     setState(() => _phase = _EnginePhase.running);
+    _fetchRendererInfo();
     _startTickLoop();
   }
 
@@ -156,6 +187,9 @@ class _GamePageState extends State<GamePage>
           });
           return;
         }
+
+        // Report frame delta to the performance overlay
+        _perfOverlayKey0.currentState?.reportFrameDelta(deltaMs.toDouble());
 
         // Poll frame immediately after tick
         await _surfaceKey.currentState?.pollFrame();
@@ -229,6 +263,26 @@ class _GamePageState extends State<GamePage>
     }
   }
 
+  // --- Performance overlay ---
+
+  Future<void> _loadPerfOverlaySetting() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _showPerfOverlay = prefs.getBool(_perfOverlayKey) ?? false;
+      });
+    }
+  }
+
+  void _fetchRendererInfo() {
+    try {
+      _rendererInfo = _bridge.engineGetRendererInfo();
+      if (mounted) setState(() {});
+    } catch (_) {
+      // Renderer info is best-effort
+    }
+  }
+
   // --- Logging ---
 
   void _log(String message) {
@@ -238,6 +292,10 @@ class _GamePageState extends State<GamePage>
     _logs.insert(0, '[$time] $message');
     if (_logs.length > _maxLogs) {
       _logs.removeRange(_maxLogs, _logs.length);
+    }
+    // Try to update the UI if we're in a loading phase
+    if (mounted && _phase != _EnginePhase.running) {
+      setState(() {});
     }
   }
 
@@ -279,8 +337,15 @@ class _GamePageState extends State<GamePage>
                         onLog: (msg) => _log('surface: $msg'),
                         onError: (msg) => _log('surface error: $msg'),
                       )
-                    : _buildLoadingView(),
+                    : _buildBootLogView(),
           ),
+
+          // Performance overlay (top-left)
+          if (_showPerfOverlay && _phase == _EnginePhase.running)
+            EnginePerformanceOverlay(
+              key: _perfOverlayKey0,
+              rendererInfo: _rendererInfo,
+            ),
 
           // Floating menu button (top-right)
           Positioned(
@@ -318,37 +383,188 @@ class _GamePageState extends State<GamePage>
     );
   }
 
-  Widget _buildLoadingView() {
-    String message;
+  Widget _buildBootLogView() {
+    // Full-screen terminal-style boot log — no animations that would
+    // freeze during synchronous FFI calls.
+    final String phaseLabel;
     switch (_phase) {
       case _EnginePhase.initializing:
-        message = 'Initializing...';
+        phaseLabel = 'INITIALIZING';
         break;
       case _EnginePhase.creating:
-        message = 'Creating engine...';
+        phaseLabel = 'CREATING ENGINE';
         break;
       case _EnginePhase.opening:
-        message = 'Opening game...';
+        phaseLabel = 'LOADING GAME';
         break;
       default:
-        message = 'Loading...';
+        phaseLabel = 'LOADING';
     }
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const CircularProgressIndicator(color: Colors.white70),
-          const SizedBox(height: 24),
-          Text(
-            message,
-            style: const TextStyle(color: Colors.white70, fontSize: 16),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            widget.gamePath,
-            style: const TextStyle(color: Colors.white38, fontSize: 13),
-          ),
-        ],
+
+    // Reversed logs so newest is at the bottom (terminal style)
+    final reversedLogs = _logs.reversed.toList();
+
+    // Schedule scroll-to-bottom after this frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_bootLogScrollController.hasClients) {
+        _bootLogScrollController.jumpTo(
+          _bootLogScrollController.position.maxScrollExtent,
+        );
+      }
+    });
+
+    return Container(
+      color: Colors.black,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header bar
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: const BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Colors.white10),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _phase == _EnginePhase.opening
+                          ? Colors.orangeAccent
+                          : Colors.greenAccent,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    phaseLabel,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'monospace',
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'krkr2 engine',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.3),
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Game path info
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.white.withValues(alpha: 0.03),
+              child: Text(
+                widget.gamePath,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.4),
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            // Log area — scrollable terminal output
+            Expanded(
+              child: reversedLogs.isEmpty
+                  ? Center(
+                      child: Text(
+                        'Waiting...',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: _bootLogScrollController,
+                      padding: const EdgeInsets.all(12),
+                      itemCount: reversedLogs.length,
+                      itemBuilder: (context, index) {
+                        final log = reversedLogs[index];
+                        final isError = log.contains('ERROR');
+                        final isOk = log.contains('=> OK');
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: Text(
+                            log,
+                            style: TextStyle(
+                              color: isError
+                                  ? Colors.redAccent
+                                  : isOk
+                                      ? Colors.greenAccent
+                                      : Colors.white.withValues(alpha: 0.6),
+                              fontSize: 12,
+                              fontFamily: 'monospace',
+                              height: 1.4,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            // Bottom status bar
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: const BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Colors.white10),
+                ),
+              ),
+              child: Row(
+                children: [
+                  // Static blinking cursor indicator (just a block char)
+                  const Text(
+                    '█',
+                    style: TextStyle(
+                      color: Colors.greenAccent,
+                      fontSize: 14,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _phase == _EnginePhase.opening
+                        ? 'Engine is loading game resources...'
+                        : 'Preparing engine...',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.4),
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: _exitGame,
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.3),
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        decoration: TextDecoration.underline,
+                        decorationColor: Colors.white.withValues(alpha: 0.3),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

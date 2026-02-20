@@ -319,6 +319,14 @@ class FlutterEngineBridge {
     return resultOrVersion;
   }
 
+  String engineGetRendererInfo() {
+    final ffi = _ffiBridge;
+    if (ffi == null) {
+      return '';
+    }
+    return ffi.getRendererInfo();
+  }
+
   String engineGetLastError() {
     final ffi = _ffiBridge;
     if (ffi == null) {

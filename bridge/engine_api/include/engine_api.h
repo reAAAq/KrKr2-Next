@@ -237,6 +237,18 @@ ENGINE_API_EXPORT engine_result_t engine_get_frame_rendered_flag(
 );
 
 /*
+ * Queries the graphics renderer information string.
+ * Writes a null-terminated UTF-8 string into out_buffer describing
+ * the active graphics backend (e.g. "Metal", "OpenGL ES", "D3D11").
+ *
+ * out_buffer and buffer_size must be non-null / > 0.
+ * If the buffer is too small the string is truncated.
+ * Returns ENGINE_RESULT_INVALID_STATE if the runtime is not active.
+ */
+ENGINE_API_EXPORT engine_result_t engine_get_renderer_info(
+    engine_handle_t handle, char* out_buffer, uint32_t buffer_size);
+
+/*
  * Returns last error message as UTF-8 null-terminated string.
  * The returned pointer remains valid until next API call on the same handle.
  * Returns empty string when no error is recorded.

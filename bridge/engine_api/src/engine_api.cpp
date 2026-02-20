@@ -1224,6 +1224,51 @@ engine_result_t engine_get_frame_rendered_flag(engine_handle_t handle,
   return ENGINE_RESULT_OK;
 }
 
+engine_result_t engine_get_renderer_info(engine_handle_t handle,
+                                         char* out_buffer,
+                                         uint32_t buffer_size) {
+  if (out_buffer == nullptr || buffer_size == 0) {
+    return SetThreadErrorAndReturn(ENGINE_RESULT_INVALID_ARGUMENT,
+                                   "out_buffer is null or buffer_size is 0");
+  }
+  out_buffer[0] = '\0';
+
+  std::lock_guard<std::recursive_mutex> registry_guard(g_registry_mutex);
+  engine_handle_s* impl = nullptr;
+  auto result = ValidateHandleLocked(handle, &impl);
+  if (result != ENGINE_RESULT_OK) {
+    return result;
+  }
+
+  std::lock_guard<std::recursive_mutex> guard(impl->mutex);
+  result = ValidateHandleThreadLocked(impl);
+  if (result != ENGINE_RESULT_OK) {
+    return result;
+  }
+
+  if (!g_runtime_active || g_runtime_owner != handle) {
+    return SetHandleErrorAndReturnLocked(
+        impl,
+        ENGINE_RESULT_INVALID_STATE,
+        "engine_open_game must succeed before engine_get_renderer_info");
+  }
+
+  // Query GL renderer and version strings from the active ANGLE context.
+  const char* gl_renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+  const char* gl_version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+  if (!gl_renderer) gl_renderer = "(unknown)";
+  if (!gl_version) gl_version = "(unknown)";
+
+  // Build a combined info string.
+  std::string info = std::string(gl_renderer) + " | " + std::string(gl_version);
+  std::strncpy(out_buffer, info.c_str(), buffer_size - 1);
+  out_buffer[buffer_size - 1] = '\0';
+
+  ClearHandleErrorLocked(impl);
+  SetThreadError(nullptr);
+  return ENGINE_RESULT_OK;
+}
+
 const char* engine_get_last_error(engine_handle_t handle) {
   if (handle == nullptr) {
     return g_thread_error.c_str();
@@ -1769,6 +1814,23 @@ engine_result_t engine_get_frame_rendered_flag(engine_handle_t handle,
   }
 
   impl->last_error.clear();
+  SetThreadError(nullptr);
+  return ENGINE_RESULT_OK;
+}
+
+engine_result_t engine_get_renderer_info(engine_handle_t handle,
+                                         char* out_buffer,
+                                         uint32_t buffer_size) {
+  if (out_buffer == nullptr || buffer_size == 0) {
+    return SetThreadErrorAndReturn(ENGINE_RESULT_INVALID_ARGUMENT,
+                                   "out_buffer is null or buffer_size is 0");
+  }
+  out_buffer[0] = '\0';
+
+  // Stub build — return a placeholder string.
+  const char* stub_info = "Stub (no runtime)";
+  std::strncpy(out_buffer, stub_info, buffer_size - 1);
+  out_buffer[buffer_size - 1] = '\0';
   SetThreadError(nullptr);
   return ENGINE_RESULT_OK;
 }

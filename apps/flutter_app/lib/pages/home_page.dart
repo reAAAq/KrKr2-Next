@@ -16,10 +16,12 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   static const String _dylibPathKey = 'krkr2_dylib_path';
+  static const String _perfOverlayKey = 'krkr2_perf_overlay';
 
   final GameManager _gameManager = GameManager();
   bool _loading = true;
   String? _dylibPath;
+  bool _perfOverlay = false;
 
   @override
   void initState() {
@@ -30,6 +32,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadGames() async {
     final prefs = await SharedPreferences.getInstance();
     _dylibPath = prefs.getString(_dylibPathKey);
+    _perfOverlay = prefs.getBool(_perfOverlayKey) ?? false;
     await _gameManager.load();
     if (mounted) setState(() => _loading = false);
   }
@@ -147,6 +150,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _showSettingsDialog() async {
     String? tempPath = _dylibPath;
+    bool tempPerfOverlay = _perfOverlay;
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -216,6 +220,18 @@ class _HomePageState extends State<HomePage> {
                   label: const Text('Browse...'),
                 ),
               ),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                title: const Text('Performance Overlay'),
+                subtitle: const Text('Show FPS and graphics API info'),
+                value: tempPerfOverlay,
+                contentPadding: EdgeInsets.zero,
+                onChanged: (value) {
+                  setDialogState(() => tempPerfOverlay = value);
+                },
+              ),
             ],
           ),
           actions: [
@@ -231,8 +247,12 @@ class _HomePageState extends State<HomePage> {
                 } else {
                   await prefs.remove(_dylibPathKey);
                 }
+                await prefs.setBool(_perfOverlayKey, tempPerfOverlay);
                 if (mounted) {
-                  setState(() => _dylibPath = tempPath);
+                  setState(() {
+                    _dylibPath = tempPath;
+                    _perfOverlay = tempPerfOverlay;
+                  });
                 }
                 if (ctx.mounted) Navigator.pop(ctx);
               },

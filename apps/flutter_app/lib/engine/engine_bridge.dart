@@ -100,6 +100,7 @@ abstract interface class EngineBridge {
   });
   Future<void> disposeIOSurfaceTexture({required int textureId});
 
+  String engineGetRendererInfo();
   String engineGetLastError();
 }
 
