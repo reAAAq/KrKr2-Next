@@ -14130,7 +14130,7 @@ TVP_GL_FUNC_DECL(void, TVPInitTVPGL, ()) {
 #endif
     TVPCreateTable();
     TVPGL_C_Init();
-    TVPGL_SIMD_Init();  // Highway SIMD override (must be after TVPGL_C_Init)
+    // TVPGL_SIMD_Init();  // Highway SIMD override - temporarily disabled
 }
 
 /*export*/
