@@ -617,6 +617,12 @@ class _EngineSurfaceState extends State<EngineSurface> {
                   event: event,
                 );
               },
+              onPointerHover: (event) {
+                _sendPointer(
+                  type: EngineInputEventType.pointerMove,
+                  event: event,
+                );
+              },
               onPointerSignal: (PointerSignalEvent signal) {
                 if (signal is PointerScrollEvent) {
                   _sendPointer(
