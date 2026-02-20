@@ -72,6 +72,8 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage>
   bool _busy = false;
   bool _tickInFlight = false;
   bool _isTicking = false;
+  final GlobalKey<EngineSurfaceState> _surfaceKey =
+      GlobalKey<EngineSurfaceState>();
   SurfaceRenderMode _surfaceMode = SurfaceRenderMode.iosurface;
   bool _autoPausedByLifecycle = false;
   bool _resumeTickLoopAfterLifecyclePause = false;
@@ -565,6 +567,10 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage>
           return;
         }
 
+        // Immediately poll the surface frame after tick completes,
+        // eliminating the dual-timer phase mismatch.
+        await _surfaceKey.currentState?.pollFrame();
+
         setState(() {
           _tickCount += 1;
           _lastResult = 'engine_tick => $result';
@@ -664,6 +670,7 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage>
         _engineStatus == 'Ticking' ||
         _engineStatus == 'Paused';
     final Widget engineSurface = EngineSurface(
+            key: _surfaceKey,
             bridge: _bridge,
             active: isSurfaceActive,
             surfaceMode: _surfaceMode == SurfaceRenderMode.iosurface
@@ -671,6 +678,7 @@ class _EngineBridgeHomePageState extends State<EngineBridgeHomePage>
                 : _surfaceMode == SurfaceRenderMode.texture
                     ? EngineSurfaceMode.texture
                     : EngineSurfaceMode.software,
+            externalTickDriven: _isTicking,
             onLog: (String message) {
               _appendLog('surface: $message');
             },

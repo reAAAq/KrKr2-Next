@@ -35,6 +35,7 @@ class EngineSurface extends StatefulWidget {
     required this.active,
     this.surfaceMode = EngineSurfaceMode.iosurface,
     this.pollInterval = const Duration(milliseconds: 16),
+    this.externalTickDriven = false,
     this.onLog,
     this.onError,
   });
@@ -43,14 +44,19 @@ class EngineSurface extends StatefulWidget {
   final bool active;
   final EngineSurfaceMode surfaceMode;
   final Duration pollInterval;
+
+  /// When true, the internal frame polling timer is disabled.
+  /// The parent widget must call [EngineSurfaceState.pollFrame()] after each
+  /// engine tick to eliminate the dual-timer phase mismatch.
+  final bool externalTickDriven;
   final ValueChanged<String>? onLog;
   final ValueChanged<String>? onError;
 
   @override
-  State<EngineSurface> createState() => _EngineSurfaceState();
+  EngineSurfaceState createState() => EngineSurfaceState();
 }
 
-class _EngineSurfaceState extends State<EngineSurface> {
+class EngineSurfaceState extends State<EngineSurface> {
   final FocusNode _focusNode = FocusNode(debugLabel: 'engine-surface-focus');
   Timer? _frameTimer;
   bool _frameInFlight = false;
@@ -88,7 +94,8 @@ class _EngineSurfaceState extends State<EngineSurface> {
     }
     if (oldWidget.active != widget.active ||
         oldWidget.bridge != widget.bridge ||
-        oldWidget.surfaceMode != widget.surfaceMode) {
+        oldWidget.surfaceMode != widget.surfaceMode ||
+        oldWidget.externalTickDriven != widget.externalTickDriven) {
       _reconcilePolling();
     }
   }
@@ -108,7 +115,7 @@ class _EngineSurfaceState extends State<EngineSurface> {
   }
 
   void _reconcilePolling() {
-    if (!widget.active) {
+    if (!widget.active || widget.externalTickDriven) {
       _frameTimer?.cancel();
       _frameTimer = null;
       return;
@@ -119,6 +126,11 @@ class _EngineSurfaceState extends State<EngineSurface> {
     });
     unawaited(_pollFrame());
   }
+
+  /// Public entry point for the parent tick loop to drive frame polling.
+  /// Call this immediately after [EngineBridge.engineTick] completes
+  /// to eliminate the dual-timer phase mismatch.
+  Future<void> pollFrame() => _pollFrame();
 
   Future<void> _ensureSurfaceSize(Size size, double devicePixelRatio) async {
     if (!widget.active) {
