@@ -40,3 +40,12 @@ target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     HWY_COMPILE_ONLY_STATIC=1
 )
+
+# CRITICAL: Highway SIMD intrinsics MUST be compiled with optimization,
+# even in Debug builds. Without at least -O2, all hn::Mul/Add/ShiftRight/etc
+# remain as function calls instead of inline SIMD instructions, causing
+# massive performance degradation (~20x slower than scalar C code).
+# This is standard practice for all Highway/SIMD projects.
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_options(${PROJECT_NAME} PRIVATE -O2 -g)
+endif()
