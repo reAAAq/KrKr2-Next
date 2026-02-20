@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -5,6 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/game_info.dart';
 import '../services/game_manager.dart';
 import 'game_page.dart';
+
+/// Engine loading mode: built-in (bundled in .app) or custom (user-specified).
+enum EngineMode { builtIn, custom }
 
 /// The home / launcher page — manage and launch games.
 class HomePage extends StatefulWidget {
@@ -16,6 +21,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   static const String _dylibPathKey = 'krkr2_dylib_path';
+  static const String _engineModeKey = 'krkr2_engine_mode';
   static const String _perfOverlayKey = 'krkr2_perf_overlay';
   static const String _targetFpsKey = 'krkr2_target_fps';
   static const List<int> _fpsOptions = [30, 60, 120];
@@ -23,9 +29,33 @@ class _HomePageState extends State<HomePage> {
 
   final GameManager _gameManager = GameManager();
   bool _loading = true;
-  String? _dylibPath;
+  EngineMode _engineMode = EngineMode.builtIn;
+  String? _customDylibPath;
+  String? _builtInDylibPath;
+  bool _builtInAvailable = false;
   bool _perfOverlay = false;
   int _targetFps = _defaultFps;
+
+  /// Resolve the built-in engine dylib path from the app bundle.
+  /// On macOS: `<executable>/../Frameworks/libengine_api.dylib`
+  String? _resolveBuiltInDylibPath() {
+    try {
+      final executablePath = Platform.resolvedExecutable;
+      final execDir = File(executablePath).parent.path;
+      final frameworksPath = '$execDir/../Frameworks/libengine_api.dylib';
+      final resolved = File(frameworksPath);
+      if (resolved.existsSync()) return resolved.path;
+    } catch (_) {}
+    return null;
+  }
+
+  /// The effective dylib path based on current engine mode.
+  String? get _effectiveDylibPath {
+    if (_engineMode == EngineMode.builtIn) {
+      return _builtInDylibPath;
+    }
+    return _customDylibPath;
+  }
 
   @override
   void initState() {
@@ -35,7 +65,11 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadGames() async {
     final prefs = await SharedPreferences.getInstance();
-    _dylibPath = prefs.getString(_dylibPathKey);
+    final modeStr = prefs.getString(_engineModeKey);
+    _engineMode = modeStr == 'custom' ? EngineMode.custom : EngineMode.builtIn;
+    _customDylibPath = prefs.getString(_dylibPathKey);
+    _builtInDylibPath = _resolveBuiltInDylibPath();
+    _builtInAvailable = _builtInDylibPath != null;
     _perfOverlay = prefs.getBool(_perfOverlayKey) ?? false;
     _targetFps = prefs.getInt(_targetFpsKey) ?? _defaultFps;
     if (!_fpsOptions.contains(_targetFps)) _targetFps = _defaultFps;
@@ -128,12 +162,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _launchGame(GameInfo game) {
-    if (_dylibPath == null) {
+    final dylibPath = _effectiveDylibPath;
+    if (dylibPath == null) {
+      final msg = _engineMode == EngineMode.builtIn
+          ? 'Built-in engine not found. Please use build_macos.sh to bundle the engine, or switch to Custom mode in Settings.'
+          : 'Engine dylib not set. Please configure it in Settings first.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text(
-            'Engine dylib not set. Please configure it in Settings first.',
-          ),
+          content: Text(msg),
           behavior: SnackBarBehavior.floating,
           action: SnackBarAction(
             label: 'Settings',
@@ -148,14 +184,15 @@ class _HomePageState extends State<HomePage> {
       MaterialPageRoute<void>(
         builder: (_) => GamePage(
           gamePath: game.path,
-          ffiLibraryPath: _dylibPath,
+          ffiLibraryPath: dylibPath,
         ),
       ),
     );
   }
 
   Future<void> _showSettingsDialog() async {
-    String? tempPath = _dylibPath;
+    EngineMode tempMode = _engineMode;
+    String? tempCustomPath = _customDylibPath;
     bool tempPerfOverlay = _perfOverlay;
     int tempTargetFps = _targetFps;
     await showDialog<void>(
@@ -163,125 +200,101 @@ class _HomePageState extends State<HomePage> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           title: const Text('Settings'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Engine dylib path',
-                style: Theme.of(ctx).textTheme.titleSmall,
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(ctx).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Engine Mode',
+                  style: Theme.of(ctx).textTheme.titleSmall,
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        tempPath ?? 'Not set (required)',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontFamily: 'monospace',
-                          color: tempPath != null
-                              ? null
-                              : Theme.of(ctx)
-                                  .colorScheme
-                                  .error
-                                  .withValues(alpha: 0.7),
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: SegmentedButton<EngineMode>(
+                    segments: const [
+                      ButtonSegment<EngineMode>(
+                        value: EngineMode.builtIn,
+                        label: Text('Built-in'),
+                        icon: Icon(Icons.inventory_2),
                       ),
-                    ),
-                    if (tempPath != null)
-                      IconButton(
-                        icon: const Icon(Icons.clear, size: 18),
-                        tooltip: 'Reset to default',
-                        onPressed: () {
-                          setDialogState(() => tempPath = null);
-                        },
+                      ButtonSegment<EngineMode>(
+                        value: EngineMode.custom,
+                        label: Text('Custom'),
+                        icon: Icon(Icons.folder_open),
                       ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () async {
-                    final result = await FilePicker.platform.pickFiles(
-                      dialogTitle: 'Select Engine dylib',
-                      type: FileType.any,
-                    );
-                    if (result != null && result.files.single.path != null) {
-                      setDialogState(
-                        () => tempPath = result.files.single.path,
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.folder_open),
-                  label: const Text('Browse...'),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 8),
-              SwitchListTile(
-                title: const Text('Performance Overlay'),
-                subtitle: const Text('Show FPS and graphics API info'),
-                value: tempPerfOverlay,
-                contentPadding: EdgeInsets.zero,
-                onChanged: (value) {
-                  setDialogState(() => tempPerfOverlay = value);
-                },
-              ),
-              const SizedBox(height: 8),
-              const Divider(),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Target Frame Rate',
-                          style: Theme.of(ctx).textTheme.titleSmall,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Limits engine tick rate',
-                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(ctx)
-                                    .colorScheme
-                                    .onSurface
-                                    .withValues(alpha: 0.6),
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  DropdownButton<int>(
-                    value: tempTargetFps,
-                    items: _fpsOptions
-                        .map((fps) => DropdownMenuItem<int>(
-                              value: fps,
-                              child: Text('$fps FPS'),
-                            ))
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setDialogState(() => tempTargetFps = value);
-                      }
+                    ],
+                    selected: {tempMode},
+                    onSelectionChanged: (Set<EngineMode> selected) {
+                      setDialogState(() => tempMode = selected.first);
                     },
                   ),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(height: 12),
+                // Built-in engine status
+                if (tempMode == EngineMode.builtIn) ..._buildBuiltInSection(ctx),
+                // Custom engine path
+                if (tempMode == EngineMode.custom)
+                  ..._buildCustomSection(ctx, tempCustomPath, (path) {
+                    setDialogState(() => tempCustomPath = path);
+                  }),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  title: const Text('Performance Overlay'),
+                  subtitle: const Text('Show FPS and graphics API info'),
+                  value: tempPerfOverlay,
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (value) {
+                    setDialogState(() => tempPerfOverlay = value);
+                  },
+                ),
+                const SizedBox(height: 8),
+                const Divider(),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Target Frame Rate',
+                            style: Theme.of(ctx).textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Limits engine tick rate',
+                            style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(ctx)
+                                      .colorScheme
+                                      .onSurface
+                                      .withValues(alpha: 0.6),
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    DropdownButton<int>(
+                      value: tempTargetFps,
+                      items: _fpsOptions
+                          .map((fps) => DropdownMenuItem<int>(
+                                value: fps,
+                                child: Text('$fps FPS'),
+                              ))
+                          .toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() => tempTargetFps = value);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -291,8 +304,12 @@ class _HomePageState extends State<HomePage> {
             FilledButton(
               onPressed: () async {
                 final prefs = await SharedPreferences.getInstance();
-                if (tempPath != null) {
-                  await prefs.setString(_dylibPathKey, tempPath!);
+                await prefs.setString(
+                  _engineModeKey,
+                  tempMode == EngineMode.custom ? 'custom' : 'builtIn',
+                );
+                if (tempCustomPath != null) {
+                  await prefs.setString(_dylibPathKey, tempCustomPath!);
                 } else {
                   await prefs.remove(_dylibPathKey);
                 }
@@ -300,7 +317,8 @@ class _HomePageState extends State<HomePage> {
                 await prefs.setInt(_targetFpsKey, tempTargetFps);
                 if (mounted) {
                   setState(() {
-                    _dylibPath = tempPath;
+                    _engineMode = tempMode;
+                    _customDylibPath = tempCustomPath;
                     _perfOverlay = tempPerfOverlay;
                     _targetFps = tempTargetFps;
                   });
@@ -315,6 +333,154 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Build the built-in engine status section for the settings dialog.
+  List<Widget> _buildBuiltInSection(BuildContext ctx) {
+    return [
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: _builtInAvailable
+              ? Colors.green.withValues(alpha: 0.1)
+              : Theme.of(ctx).colorScheme.errorContainer.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: _builtInAvailable
+                ? Colors.green.withValues(alpha: 0.3)
+                : Theme.of(ctx).colorScheme.error.withValues(alpha: 0.3),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              _builtInAvailable ? Icons.check_circle : Icons.warning_amber,
+              color: _builtInAvailable
+                  ? Colors.green
+                  : Theme.of(ctx).colorScheme.error,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _builtInAvailable
+                        ? 'Built-in engine available'
+                        : 'Built-in engine not found',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _builtInAvailable
+                          ? Colors.green
+                          : Theme.of(ctx).colorScheme.error,
+                    ),
+                  ),
+                  if (!_builtInAvailable)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Use build_macos.sh to compile and bundle the engine into the app.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Theme.of(ctx)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ),
+                  if (_builtInAvailable && _builtInDylibPath != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        _builtInDylibPath!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                          color: Theme.of(ctx)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.5),
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  /// Build the custom dylib path section for the settings dialog.
+  List<Widget> _buildCustomSection(
+    BuildContext ctx,
+    String? tempPath,
+    ValueChanged<String?> onChanged,
+  ) {
+    return [
+      Text(
+        'Engine dylib path',
+        style: Theme.of(ctx).textTheme.titleSmall,
+      ),
+      const SizedBox(height: 8),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Theme.of(ctx).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                tempPath ?? 'Not set (required)',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontFamily: 'monospace',
+                  color: tempPath != null
+                      ? null
+                      : Theme.of(ctx)
+                          .colorScheme
+                          .error
+                          .withValues(alpha: 0.7),
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (tempPath != null)
+              IconButton(
+                icon: const Icon(Icons.clear, size: 18),
+                tooltip: 'Clear path',
+                onPressed: () => onChanged(null),
+              ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 12),
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () async {
+            final result = await FilePicker.platform.pickFiles(
+              dialogTitle: 'Select Engine dylib',
+              type: FileType.any,
+            );
+            if (result != null && result.files.single.path != null) {
+              onChanged(result.files.single.path);
+            }
+          },
+          icon: const Icon(Icons.folder_open),
+          label: const Text('Browse...'),
+        ),
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final games = _gameManager.games;
@@ -324,18 +490,29 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: const Text('Krkr2 Launcher'),
         actions: [
-          if (_dylibPath != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Chip(
-                avatar: const Icon(Icons.extension, size: 16),
-                label: Text(
-                  _dylibPath!.split('/').last,
-                  style: const TextStyle(fontSize: 12),
-                ),
-                visualDensity: VisualDensity.compact,
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Chip(
+              avatar: Icon(
+                _engineMode == EngineMode.builtIn
+                    ? Icons.inventory_2
+                    : Icons.extension,
+                size: 16,
               ),
+              label: Text(
+                _engineMode == EngineMode.builtIn
+                    ? (_builtInAvailable ? 'Built-in ✓' : 'Built-in ✗')
+                    : (_customDylibPath != null
+                        ? _customDylibPath!.split('/').last
+                        : 'Custom (not set)'),
+                style: const TextStyle(fontSize: 12),
+              ),
+              backgroundColor: _effectiveDylibPath != null
+                  ? Colors.green.withValues(alpha: 0.15)
+                  : Colors.orange.withValues(alpha: 0.15),
+              visualDensity: VisualDensity.compact,
             ),
+          ),
           IconButton(
             icon: const Icon(Icons.settings),
             tooltip: 'Settings',
