@@ -12,7 +12,7 @@ class Krkr2App extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Krkr2',
+      title: 'KrKr2 Next',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(

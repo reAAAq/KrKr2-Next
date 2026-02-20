@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">krkr2-flutter</h1>
+  <h1 align="center">KrKr2 Next</h1>
   <p align="center">基于 Flutter 重构的下一代 KiriKiri2 跨平台模拟器</p>
 </p>
 

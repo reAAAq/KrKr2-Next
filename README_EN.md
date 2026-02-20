@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">krkr2-flutter</h1>
+  <h1 align="center">KrKr2 Next</h1>
   <p align="center">Next-Generation KiriKiri2 Cross-Platform Emulator Built with Flutter</p>
 </p>
 
