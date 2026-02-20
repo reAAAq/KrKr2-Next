@@ -27,7 +27,7 @@ class GamePage extends StatefulWidget {
 }
 
 class _GamePageState extends State<GamePage>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+    with WidgetsBindingObserver {
   static const int _engineResultOk = 0;
 
   late EngineBridge _bridge;
@@ -44,6 +44,10 @@ class _GamePageState extends State<GamePage>
   bool _autoPausedByLifecycle = false;
   bool _resumeTickAfterLifecycle = false;
   bool _lifecycleTransitionInFlight = false;
+  /// When true, a resume was requested while a pause transition was
+  /// still in flight. The pause handler checks this on completion and
+  /// triggers a resume automatically.
+  bool _pendingLifecycleResumed = false;
 
   // Frame rate
   int _targetFps = _defaultFps;
@@ -104,10 +108,18 @@ class _GamePageState extends State<GamePage>
       case AppLifecycleState.resumed:
         unawaited(_resumeForLifecycle());
         break;
-      case AppLifecycleState.inactive:
       case AppLifecycleState.hidden:
       case AppLifecycleState.paused:
+        // Only pause when the app is truly invisible (hidden/paused).
+        // On macOS desktop, switching windows only triggers 'inactive',
+        // which should NOT pause the engine — the window is still
+        // partially visible and the user expects the game to keep running.
         unawaited(_pauseForLifecycle());
+        break;
+      case AppLifecycleState.inactive:
+        // On mobile, 'inactive' precedes 'hidden'/'paused' so we let those
+        // handle the pause. On desktop, 'inactive' is just focus-lost and
+        // should be ignored to avoid freezing the game on window switch.
         break;
       case AppLifecycleState.detached:
         break;
@@ -173,7 +185,7 @@ class _GamePageState extends State<GamePage>
 
     Duration lastElapsed = Duration.zero;
     int vsyncCounter = 0;
-    _ticker = createTicker((Duration elapsed) async {
+    _ticker = Ticker((Duration elapsed) async {
       if (_tickInFlight) return;
 
       // Throttle: skip vsync ticks to match target FPS
@@ -236,13 +248,19 @@ class _GamePageState extends State<GamePage>
   // --- Lifecycle ---
 
   Future<void> _pauseForLifecycle() async {
-    if (!mounted ||
-        _lifecycleTransitionInFlight ||
-        _autoPausedByLifecycle ||
-        _phase != _EnginePhase.running) {
+    // If a resume comes while we are still pausing, record it so we
+    // can bounce back after the pause finishes.
+    if (_lifecycleTransitionInFlight) {
+      // Another transition is running — just clear the pending-resume
+      // flag; we want to stay paused.
+      _pendingLifecycleResumed = false;
+      return;
+    }
+    if (!mounted || _autoPausedByLifecycle || _phase != _EnginePhase.running) {
       return;
     }
     _lifecycleTransitionInFlight = true;
+    _pendingLifecycleResumed = false;
     final bool wasTicking = _isTicking;
     if (wasTicking) _stopTickLoop();
 
@@ -256,15 +274,27 @@ class _GamePageState extends State<GamePage>
     } finally {
       _lifecycleTransitionInFlight = false;
     }
+
+    // If a resume was requested while the pause was in-flight, honour
+    // it now so the engine doesn't stay frozen.
+    if (_pendingLifecycleResumed && mounted) {
+      _pendingLifecycleResumed = false;
+      await _resumeForLifecycle();
+    }
   }
 
   Future<void> _resumeForLifecycle() async {
-    if (!mounted ||
-        _lifecycleTransitionInFlight ||
-        !_autoPausedByLifecycle) {
+    // If a pause is still in-flight, record that we want to resume
+    // once it completes.
+    if (_lifecycleTransitionInFlight) {
+      _pendingLifecycleResumed = true;
+      return;
+    }
+    if (!mounted || !_autoPausedByLifecycle) {
       return;
     }
     _lifecycleTransitionInFlight = true;
+    _pendingLifecycleResumed = false;
 
     try {
       final int result = await _bridge.engineResume();
