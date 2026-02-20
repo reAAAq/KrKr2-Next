@@ -35,6 +35,8 @@ class _GamePageState extends State<GamePage>
       GlobalKey<EngineSurfaceState>();
 
   static const String _perfOverlayKey = 'krkr2_perf_overlay';
+  static const String _targetFpsKey = 'krkr2_target_fps';
+  static const int _defaultFps = 60;
 
   Ticker? _ticker;
   bool _tickInFlight = false;
@@ -42,6 +44,13 @@ class _GamePageState extends State<GamePage>
   bool _autoPausedByLifecycle = false;
   bool _resumeTickAfterLifecycle = false;
   bool _lifecycleTransitionInFlight = false;
+
+  // Frame rate
+  int _targetFps = _defaultFps;
+  /// How many vsync ticks to skip between engine ticks.
+  /// e.g. 0 = every vsync (60 FPS on a 60 Hz display),
+  ///      1 = every other vsync (30 FPS on a 60 Hz display).
+  int _vsyncSkip = 0;
 
   // Performance overlay
   bool _showPerfOverlay = false;
@@ -66,7 +75,7 @@ class _GamePageState extends State<GamePage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _bridge = widget.engineBridgeBuilder(ffiLibraryPath: widget.ffiLibraryPath);
-    _loadPerfOverlaySetting();
+    _loadSettings();
     _log('Initializing engine for: ${widget.gamePath}');
     if (widget.ffiLibraryPath != null) {
       _log('Using custom dylib: ${widget.ffiLibraryPath}');
@@ -163,8 +172,16 @@ class _GamePageState extends State<GamePage>
     _log('Tick loop started');
 
     Duration lastElapsed = Duration.zero;
+    int vsyncCounter = 0;
     _ticker = createTicker((Duration elapsed) async {
       if (_tickInFlight) return;
+
+      // Throttle: skip vsync ticks to match target FPS
+      if (_vsyncSkip > 0) {
+        vsyncCounter++;
+        if (vsyncCounter <= _vsyncSkip) return;
+        vsyncCounter = 0;
+      }
 
       final int deltaMs = lastElapsed == Duration.zero
           ? 16
@@ -263,14 +280,33 @@ class _GamePageState extends State<GamePage>
     }
   }
 
-  // --- Performance overlay ---
+  // --- Settings ---
 
-  Future<void> _loadPerfOverlaySetting() async {
+  Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
+      final fps = prefs.getInt(_targetFpsKey) ?? _defaultFps;
       setState(() {
         _showPerfOverlay = prefs.getBool(_perfOverlayKey) ?? false;
+        _targetFps = fps;
+        _updateVsyncSkip();
       });
+    }
+  }
+
+  /// Recalculate how many vsync ticks to skip based on _targetFps.
+  /// Assumes the display runs at ~60 Hz (Flutter's default Ticker rate).
+  void _updateVsyncSkip() {
+    const int displayHz = 60;
+    if (_targetFps >= displayHz) {
+      // 60 FPS or higher → tick every vsync
+      _vsyncSkip = 0;
+    } else if (_targetFps > 0) {
+      // e.g. 30 FPS → skip = round(60/30) - 1 = 1 (tick every 2nd vsync)
+      _vsyncSkip = (displayHz / _targetFps).round() - 1;
+      if (_vsyncSkip < 0) _vsyncSkip = 0;
+    } else {
+      _vsyncSkip = 0;
     }
   }
 

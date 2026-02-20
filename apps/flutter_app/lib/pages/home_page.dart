@@ -17,11 +17,15 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   static const String _dylibPathKey = 'krkr2_dylib_path';
   static const String _perfOverlayKey = 'krkr2_perf_overlay';
+  static const String _targetFpsKey = 'krkr2_target_fps';
+  static const List<int> _fpsOptions = [30, 60, 120];
+  static const int _defaultFps = 60;
 
   final GameManager _gameManager = GameManager();
   bool _loading = true;
   String? _dylibPath;
   bool _perfOverlay = false;
+  int _targetFps = _defaultFps;
 
   @override
   void initState() {
@@ -33,6 +37,8 @@ class _HomePageState extends State<HomePage> {
     final prefs = await SharedPreferences.getInstance();
     _dylibPath = prefs.getString(_dylibPathKey);
     _perfOverlay = prefs.getBool(_perfOverlayKey) ?? false;
+    _targetFps = prefs.getInt(_targetFpsKey) ?? _defaultFps;
+    if (!_fpsOptions.contains(_targetFps)) _targetFps = _defaultFps;
     await _gameManager.load();
     if (mounted) setState(() => _loading = false);
   }
@@ -151,6 +157,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _showSettingsDialog() async {
     String? tempPath = _dylibPath;
     bool tempPerfOverlay = _perfOverlay;
+    int tempTargetFps = _targetFps;
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -232,6 +239,48 @@ class _HomePageState extends State<HomePage> {
                   setDialogState(() => tempPerfOverlay = value);
                 },
               ),
+              const SizedBox(height: 8),
+              const Divider(),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Target Frame Rate',
+                          style: Theme.of(ctx).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Limits engine tick rate',
+                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(ctx)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.6),
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  DropdownButton<int>(
+                    value: tempTargetFps,
+                    items: _fpsOptions
+                        .map((fps) => DropdownMenuItem<int>(
+                              value: fps,
+                              child: Text('$fps FPS'),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setDialogState(() => tempTargetFps = value);
+                      }
+                    },
+                  ),
+                ],
+              ),
             ],
           ),
           actions: [
@@ -248,10 +297,12 @@ class _HomePageState extends State<HomePage> {
                   await prefs.remove(_dylibPathKey);
                 }
                 await prefs.setBool(_perfOverlayKey, tempPerfOverlay);
+                await prefs.setInt(_targetFpsKey, tempTargetFps);
                 if (mounted) {
                   setState(() {
                     _dylibPath = tempPath;
                     _perfOverlay = tempPerfOverlay;
+                    _targetFps = tempTargetFps;
                   });
                 }
                 if (ctx.mounted) Navigator.pop(ctx);
