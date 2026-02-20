@@ -73,6 +73,7 @@ class EngineSurfaceState extends State<EngineSurface> {
 
   // IOSurface zero-copy mode
   int? _ioSurfaceTextureId;
+  // ignore: unused_field
   int? _ioSurfaceId;
   bool _ioSurfaceInitInFlight = false;
 
@@ -600,123 +601,78 @@ class EngineSurfaceState extends State<EngineSurface> {
     return KeyEventResult.handled;
   }
 
-  String get _modeLabel {
-    if (_ioSurfaceTextureId != null) return 'iosurface(id:$_ioSurfaceId)';
-    if (_textureId != null) return 'texture';
-    return 'software';
-  }
-
   @override
   Widget build(BuildContext context) {
     final int? activeTextureId = _ioSurfaceTextureId ?? _textureId;
 
-    return AspectRatio(
-      aspectRatio: 16 / 9,
-      child: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          final Size size = Size(constraints.maxWidth, constraints.maxHeight);
-          final double dpr = MediaQuery.of(context).devicePixelRatio;
-          unawaited(_ensureSurfaceSize(size, dpr));
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final Size size = Size(constraints.maxWidth, constraints.maxHeight);
+        final double dpr = MediaQuery.of(context).devicePixelRatio;
+        unawaited(_ensureSurfaceSize(size, dpr));
 
-          return Focus(
-            focusNode: _focusNode,
-            autofocus: true,
-            onKeyEvent: _onKeyEvent,
-            child: Listener(
-              behavior: HitTestBehavior.opaque,
-              onPointerDown: (event) {
-                _focusNode.requestFocus();
+        return Focus(
+          focusNode: _focusNode,
+          autofocus: true,
+          onKeyEvent: _onKeyEvent,
+          child: Listener(
+            behavior: HitTestBehavior.opaque,
+            onPointerDown: (event) {
+              _focusNode.requestFocus();
+              _sendPointer(
+                type: EngineInputEventType.pointerDown,
+                event: event,
+              );
+            },
+            onPointerMove: (event) {
+              _sendPointer(
+                type: EngineInputEventType.pointerMove,
+                event: event,
+              );
+            },
+            onPointerUp: (event) {
+              _sendPointer(
+                type: EngineInputEventType.pointerUp,
+                event: event,
+              );
+            },
+            onPointerHover: (event) {
+              _sendPointer(
+                type: EngineInputEventType.pointerMove,
+                event: event,
+              );
+            },
+            onPointerSignal: (PointerSignalEvent signal) {
+              if (signal is PointerScrollEvent) {
                 _sendPointer(
-                  type: EngineInputEventType.pointerDown,
-                  event: event,
+                  type: EngineInputEventType.pointerScroll,
+                  event: signal,
+                  deltaX: signal.scrollDelta.dx,
+                  deltaY: signal.scrollDelta.dy,
                 );
-              },
-              onPointerMove: (event) {
-                _sendPointer(
-                  type: EngineInputEventType.pointerMove,
-                  event: event,
-                );
-              },
-              onPointerUp: (event) {
-                _sendPointer(
-                  type: EngineInputEventType.pointerUp,
-                  event: event,
-                );
-              },
-              onPointerHover: (event) {
-                _sendPointer(
-                  type: EngineInputEventType.pointerMove,
-                  event: event,
-                );
-              },
-              onPointerSignal: (PointerSignalEvent signal) {
-                if (signal is PointerScrollEvent) {
-                  _sendPointer(
-                    type: EngineInputEventType.pointerScroll,
-                    event: signal,
-                    deltaX: signal.scrollDelta.dx,
-                    deltaY: signal.scrollDelta.dy,
-                  );
-                }
-              },
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (activeTextureId != null)
-                      _buildTextureView(activeTextureId)
-                    else if (_frameImage == null)
-                      const Center(
-                        child: Text(
-                          'Engine Surface (No frame)',
-                          style: TextStyle(color: Colors.white70),
-                        ),
-                      )
-                    else
-                      RawImage(
-                        image: _frameImage,
-                        fit: BoxFit.cover,
-                        filterQuality: FilterQuality.none,
-                      ),
-                    Positioned(
-                      left: 10,
-                      top: 10,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          'surface:${_surfaceWidth}x$_surfaceHeight  '
-                          'frame:${_frameWidth}x$_frameHeight  '
-                          '#$_lastFrameSerial  '
-                          '$_modeLabel',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
+              }
+            },
+            child: Container(
+              color: Colors.black,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (activeTextureId != null)
+                    _buildTextureView(activeTextureId)
+                  else if (_frameImage == null)
+                    const SizedBox.shrink()
+                  else
+                    RawImage(
+                      image: _frameImage,
+                      fit: BoxFit.cover,
+                      filterQuality: FilterQuality.none,
                     ),
-                  ],
-                ),
+                ],
               ),
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }
