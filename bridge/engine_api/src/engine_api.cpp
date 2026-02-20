@@ -29,6 +29,7 @@
 #include "base/impl/SysInitImpl.h"
 #include "visual/ogl/ogl_common.h"
 #include "visual/ogl/krkr_egl_context.h"
+#include "visual/impl/WindowImpl.h"
 
 int TVPDrawSceneOnce(int interval);
 
@@ -815,6 +816,25 @@ engine_result_t engine_set_surface_size(engine_handle_t handle,
                    static_cast<GLsizei>(height));
       }
     }
+
+    // Synchronize DrawDevice's DestRect/WindowSize so that
+    // TransformToPrimaryLayerManager maps surface→layer correctly.
+    // This is the authoritative update — called every time Flutter
+    // resizes the surface, which covers window resize, DPR changes, etc.
+    if (TVPMainWindow) {
+      auto* dd = TVPMainWindow->GetDrawDevice();
+      if (dd) {
+        tTVPRect dest;
+        dest.left   = 0;
+        dest.top    = 0;
+        dest.right  = static_cast<tjs_int>(width);
+        dest.bottom = static_cast<tjs_int>(height);
+        dd->SetDestRectangle(dest);
+        dd->SetClipRectangle(dest);
+        dd->SetWindowSize(static_cast<tjs_int>(width),
+                          static_cast<tjs_int>(height));
+      }
+    }
   }
 
   ClearHandleErrorLocked(impl);
@@ -1148,6 +1168,22 @@ engine_result_t engine_set_render_target_iosurface(engine_handle_t handle,
     impl->iosurface_attached = true;
     spdlog::info("engine_set_render_target_iosurface: attached id={} {}x{}",
                  iosurface_id, width, height);
+
+    // Update DrawDevice so coordinate transform uses IOSurface dimensions
+    if (TVPMainWindow) {
+      auto* dd = TVPMainWindow->GetDrawDevice();
+      if (dd) {
+        tTVPRect dest;
+        dest.left   = 0;
+        dest.top    = 0;
+        dest.right  = static_cast<tjs_int>(width);
+        dest.bottom = static_cast<tjs_int>(height);
+        dd->SetDestRectangle(dest);
+        dd->SetClipRectangle(dest);
+        dd->SetWindowSize(static_cast<tjs_int>(width),
+                          static_cast<tjs_int>(height));
+      }
+    }
   }
 
   ClearHandleErrorLocked(impl);

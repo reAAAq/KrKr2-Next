@@ -18,6 +18,7 @@
 #include "LayerManager.h"
 #include "WindowIntf.h"
 #include "DebugIntf.h"
+#include "krkr_egl_context.h"
 
 //---------------------------------------------------------------------------
 tTVPDrawDevice::tTVPDrawDevice() {
@@ -49,20 +50,49 @@ bool tTVPDrawDevice::TransformToPrimaryLayerManager(tjs_int &x, tjs_int &y) {
     iTVPLayerManager *manager = GetLayerManagerAt(PrimaryLayerManagerIndex);
     if(!manager)
         return false;
-    return true;
 
-    // プライマリレイヤマネージャのプライマリレイヤのサイズを得る
+    // Get primary layer size (game logical resolution, e.g. 800x600)
     tjs_int pl_w = LockedWidth, pl_h = LockedHeight;
-    if(pl_w <= 0 && pl_h <= 0 && !manager->GetPrimaryLayerSize(pl_w, pl_h))
-        return false;
-    // pl_w = WinWidth; pl_h = WinHeight;
+    if(pl_w <= 0 || pl_h <= 0) {
+        if(!manager->GetPrimaryLayerSize(pl_w, pl_h))
+            return false;
+    }
 
-    // x , y は DestRect の 0, 0
-    // を原点とした座標として渡されてきている
-    tjs_int w = DestRect.get_width();
-    tjs_int h = DestRect.get_height();
-    x = w ? ((x - DestRect.left) * pl_w / w) : 0;
-    y = h ? ((y - DestRect.top) * pl_h / h) : 0;
+    // Determine the source coordinate space.
+    // Priority: DestRect > WinWidth/WinHeight > EGL surface > primary layer size
+    tjs_int src_left = DestRect.left;
+    tjs_int src_top  = DestRect.top;
+    tjs_int src_w    = DestRect.get_width();
+    tjs_int src_h    = DestRect.get_height();
+    if(src_w <= 0 || src_h <= 0) {
+        src_left = 0;
+        src_top  = 0;
+        if(WinWidth > 0 && WinHeight > 0) {
+            src_w = WinWidth;
+            src_h = WinHeight;
+        } else {
+            // Fallback: query EGL surface size directly (always up-to-date)
+            auto& egl = krkr::GetEngineEGLContext();
+            if(egl.IsValid()) {
+                // Use IOSurface dimensions if attached, else Pbuffer dimensions
+                if(egl.HasIOSurface()) {
+                    src_w = static_cast<tjs_int>(egl.GetIOSurfaceWidth());
+                    src_h = static_cast<tjs_int>(egl.GetIOSurfaceHeight());
+                } else {
+                    src_w = static_cast<tjs_int>(egl.GetWidth());
+                    src_h = static_cast<tjs_int>(egl.GetHeight());
+                }
+            }
+            if(src_w <= 0 || src_h <= 0) {
+                src_w = pl_w;
+                src_h = pl_h;
+            }
+        }
+    }
+
+    // Map from source (surface) coordinates to primary layer coordinates
+    x = src_w ? ((x - src_left) * pl_w / src_w) : 0;
+    y = src_h ? ((y - src_top)  * pl_h / src_h) : 0;
 
     return true;
 }
@@ -73,20 +103,48 @@ bool tTVPDrawDevice::TransformFromPrimaryLayerManager(tjs_int &x, tjs_int &y) {
     iTVPLayerManager *manager = GetLayerManagerAt(PrimaryLayerManagerIndex);
     if(!manager)
         return false;
-    return true;
 
-    // プライマリレイヤマネージャのプライマリレイヤのサイズを得る
+    // Get primary layer size
     tjs_int pl_w = LockedWidth, pl_h = LockedHeight;
-    if(pl_w <= 0 && pl_h <= 0 && !manager->GetPrimaryLayerSize(pl_w, pl_h))
-        return false;
-    // pl_w = WinWidth; pl_h = WinHeight;
+    if(pl_w <= 0 || pl_h <= 0) {
+        if(!manager->GetPrimaryLayerSize(pl_w, pl_h))
+            return false;
+    }
 
-    // x , y は DestRect の 0, 0
-    // を原点とした座標として渡されてきている
-    x = pl_w ? (x * DestRect.get_width() / pl_w) : 0;
-    y = pl_h ? (y * DestRect.get_height() / pl_h) : 0;
-    x += DestRect.left;
-    y += DestRect.top;
+    // Determine destination coordinate space (same fallback as Transform-To)
+    tjs_int dst_left = DestRect.left;
+    tjs_int dst_top  = DestRect.top;
+    tjs_int dst_w    = DestRect.get_width();
+    tjs_int dst_h    = DestRect.get_height();
+    if(dst_w <= 0 || dst_h <= 0) {
+        dst_left = 0;
+        dst_top  = 0;
+        if(WinWidth > 0 && WinHeight > 0) {
+            dst_w = WinWidth;
+            dst_h = WinHeight;
+        } else {
+            auto& egl = krkr::GetEngineEGLContext();
+            if(egl.IsValid()) {
+                if(egl.HasIOSurface()) {
+                    dst_w = static_cast<tjs_int>(egl.GetIOSurfaceWidth());
+                    dst_h = static_cast<tjs_int>(egl.GetIOSurfaceHeight());
+                } else {
+                    dst_w = static_cast<tjs_int>(egl.GetWidth());
+                    dst_h = static_cast<tjs_int>(egl.GetHeight());
+                }
+            }
+            if(dst_w <= 0 || dst_h <= 0) {
+                dst_w = pl_w;
+                dst_h = pl_h;
+            }
+        }
+    }
+
+    // Map from primary layer coordinates to destination (surface) coordinates
+    x = pl_w ? (x * dst_w / pl_w) : 0;
+    y = pl_h ? (y * dst_h / pl_h) : 0;
+    x += dst_left;
+    y += dst_top;
     return true;
 }
 //---------------------------------------------------------------------------
@@ -97,17 +155,45 @@ bool tTVPDrawDevice::TransformToPrimaryLayerManager(tjs_real &x, tjs_real &y) {
     if(!manager)
         return false;
 
-    // プライマリレイヤマネージャのプライマリレイヤのサイズを得る
-    tjs_int pl_w, pl_h;
-    if(!manager->GetPrimaryLayerSize(pl_w, pl_h))
-        return false;
+    // Get primary layer size (game logical resolution)
+    tjs_int pl_w = LockedWidth, pl_h = LockedHeight;
+    if(pl_w <= 0 || pl_h <= 0) {
+        if(!manager->GetPrimaryLayerSize(pl_w, pl_h))
+            return false;
+    }
 
-    // x , y は DestRect の 0, 0
-    // を原点とした座標として渡されてきている
-    tjs_int w = DestRect.get_width();
-    tjs_int h = DestRect.get_height();
-    x = w ? (x * pl_w / w) : 0.0;
-    y = h ? (y * pl_h / h) : 0.0;
+    // Determine source coordinate space (same fallback chain as tjs_int version)
+    tjs_real src_left = static_cast<tjs_real>(DestRect.left);
+    tjs_real src_top  = static_cast<tjs_real>(DestRect.top);
+    tjs_real src_w    = static_cast<tjs_real>(DestRect.get_width());
+    tjs_real src_h    = static_cast<tjs_real>(DestRect.get_height());
+    if(src_w <= 0.0 || src_h <= 0.0) {
+        src_left = 0.0;
+        src_top  = 0.0;
+        if(WinWidth > 0 && WinHeight > 0) {
+            src_w = static_cast<tjs_real>(WinWidth);
+            src_h = static_cast<tjs_real>(WinHeight);
+        } else {
+            auto& egl = krkr::GetEngineEGLContext();
+            if(egl.IsValid()) {
+                if(egl.HasIOSurface()) {
+                    src_w = static_cast<tjs_real>(egl.GetIOSurfaceWidth());
+                    src_h = static_cast<tjs_real>(egl.GetIOSurfaceHeight());
+                } else {
+                    src_w = static_cast<tjs_real>(egl.GetWidth());
+                    src_h = static_cast<tjs_real>(egl.GetHeight());
+                }
+            }
+            if(src_w <= 0.0 || src_h <= 0.0) {
+                src_w = static_cast<tjs_real>(pl_w);
+                src_h = static_cast<tjs_real>(pl_h);
+            }
+        }
+    }
+
+    // Map from source (surface) coordinates to primary layer coordinates
+    x = src_w > 0.0 ? ((x - src_left) * pl_w / src_w) : 0.0;
+    y = src_h > 0.0 ? ((y - src_top)  * pl_h / src_h) : 0.0;
 
     return true;
 }

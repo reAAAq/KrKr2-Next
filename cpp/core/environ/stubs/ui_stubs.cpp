@@ -19,6 +19,7 @@
 #include "tjsCommHead.h"
 #include "tjsConfig.h"
 #include "WindowIntf.h"
+#include "WindowImpl.h"
 #include "MenuItemIntf.h"
 #include "Platform.h"
 #include "TVPWindow.h"
@@ -57,7 +58,30 @@ public:
     // -- Pure virtual implementations --
 
     void SetPaintBoxSize(tjs_int w, tjs_int h) override {
-        // Paint box size is managed by the EGL surface; no-op here
+        // When the primary layer is resized, propagate the current
+        // EGL surface dimensions as DestRect to the DrawDevice so
+        // that TransformToPrimaryLayerManager can correctly map
+        // surface-pixel coordinates → primary-layer coordinates.
+        if (!owner_) return;
+        auto* dd = owner_->GetDrawDevice();
+        if (!dd) return;
+
+        auto& egl = krkr::GetEngineEGLContext();
+        tjs_int surf_w = egl.IsValid() ? static_cast<tjs_int>(egl.GetWidth())  : w;
+        tjs_int surf_h = egl.IsValid() ? static_cast<tjs_int>(egl.GetHeight()) : h;
+        if (surf_w <= 0) surf_w = w;
+        if (surf_h <= 0) surf_h = h;
+
+        tTVPRect dest;
+        dest.left = 0;
+        dest.top  = 0;
+        dest.right  = surf_w;
+        dest.bottom = surf_h;
+        dd->SetDestRectangle(dest);
+        dd->SetClipRectangle(dest);
+        dd->SetWindowSize(surf_w, surf_h);
+        spdlog::debug("FlutterWindowLayer::SetPaintBoxSize: layer={}x{}, surface={}x{}",
+                      w, h, surf_w, surf_h);
     }
 
     bool GetFormEnabled() override { return !closing_; }

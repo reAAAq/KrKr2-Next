@@ -495,15 +495,27 @@ class _EngineSurfaceState extends State<EngineSurface> {
     if (!widget.active) {
       return;
     }
+
+    // Map pointer position from Listener's logical coordinate space
+    // to the engine surface's physical pixel coordinates.
+    //
+    // Listener's localPosition is in logical pixels. The engine's
+    // EGL surface is sized in physical pixels (logical * dpr), so
+    // multiply by dpr to get surface coordinates.
+    //
+    // The C++ side (DrawDevice::TransformToPrimaryLayerManager)
+    // then maps these surface coordinates → primary layer coordinates.
+    final double dpr = _devicePixelRatio > 0 ? _devicePixelRatio : 1.0;
+
     unawaited(
       _sendInputEvent(
         EngineInputEventData(
           type: type,
           timestampMicros: event.timeStamp.inMicroseconds,
-          x: event.localPosition.dx * _devicePixelRatio,
-          y: event.localPosition.dy * _devicePixelRatio,
-          deltaX: (deltaX ?? event.delta.dx) * _devicePixelRatio,
-          deltaY: (deltaY ?? event.delta.dy) * _devicePixelRatio,
+          x: event.localPosition.dx * dpr,
+          y: event.localPosition.dy * dpr,
+          deltaX: (deltaX ?? event.delta.dx) * dpr,
+          deltaY: (deltaY ?? event.delta.dy) * dpr,
           pointerId: event.pointer,
           button: _flutterButtonsToEngineButton(event.buttons),
         ),
