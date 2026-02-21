@@ -27,6 +27,8 @@ tTVPDrawDevice::tTVPDrawDevice() {
     PrimaryLayerManagerIndex = 0;
     DestRect.clear();
     ClipRect.clear();
+    ViewportRect.clear();
+    ViewportValid = false;
 }
 //---------------------------------------------------------------------------
 
@@ -59,11 +61,20 @@ bool tTVPDrawDevice::TransformToPrimaryLayerManager(tjs_int &x, tjs_int &y) {
     }
 
     // Determine the source coordinate space.
-    // Priority: DestRect > WinWidth/WinHeight > EGL surface > primary layer size
-    tjs_int src_left = DestRect.left;
-    tjs_int src_top  = DestRect.top;
-    tjs_int src_w    = DestRect.get_width();
-    tjs_int src_h    = DestRect.get_height();
+    // Priority: ViewportRect > DestRect > WinWidth/WinHeight > EGL surface > primary layer size
+    tjs_int src_left, src_top, src_w, src_h;
+    if (ViewportValid && ViewportRect.get_width() > 0 && ViewportRect.get_height() > 0) {
+        // Use the explicit viewport set by UpdateDrawBuffer (most reliable)
+        src_left = ViewportRect.left;
+        src_top  = ViewportRect.top;
+        src_w    = ViewportRect.get_width();
+        src_h    = ViewportRect.get_height();
+    } else {
+        src_left = DestRect.left;
+        src_top  = DestRect.top;
+        src_w    = DestRect.get_width();
+        src_h    = DestRect.get_height();
+    }
     if(src_w <= 0 || src_h <= 0) {
         src_left = 0;
         src_top  = 0;
@@ -112,10 +123,18 @@ bool tTVPDrawDevice::TransformFromPrimaryLayerManager(tjs_int &x, tjs_int &y) {
     }
 
     // Determine destination coordinate space (same fallback as Transform-To)
-    tjs_int dst_left = DestRect.left;
-    tjs_int dst_top  = DestRect.top;
-    tjs_int dst_w    = DestRect.get_width();
-    tjs_int dst_h    = DestRect.get_height();
+    tjs_int dst_left, dst_top, dst_w, dst_h;
+    if (ViewportValid && ViewportRect.get_width() > 0 && ViewportRect.get_height() > 0) {
+        dst_left = ViewportRect.left;
+        dst_top  = ViewportRect.top;
+        dst_w    = ViewportRect.get_width();
+        dst_h    = ViewportRect.get_height();
+    } else {
+        dst_left = DestRect.left;
+        dst_top  = DestRect.top;
+        dst_w    = DestRect.get_width();
+        dst_h    = DestRect.get_height();
+    }
     if(dst_w <= 0 || dst_h <= 0) {
         dst_left = 0;
         dst_top  = 0;
@@ -163,10 +182,18 @@ bool tTVPDrawDevice::TransformToPrimaryLayerManager(tjs_real &x, tjs_real &y) {
     }
 
     // Determine source coordinate space (same fallback chain as tjs_int version)
-    tjs_real src_left = static_cast<tjs_real>(DestRect.left);
-    tjs_real src_top  = static_cast<tjs_real>(DestRect.top);
-    tjs_real src_w    = static_cast<tjs_real>(DestRect.get_width());
-    tjs_real src_h    = static_cast<tjs_real>(DestRect.get_height());
+    tjs_real src_left, src_top, src_w, src_h;
+    if (ViewportValid && ViewportRect.get_width() > 0 && ViewportRect.get_height() > 0) {
+        src_left = static_cast<tjs_real>(ViewportRect.left);
+        src_top  = static_cast<tjs_real>(ViewportRect.top);
+        src_w    = static_cast<tjs_real>(ViewportRect.get_width());
+        src_h    = static_cast<tjs_real>(ViewportRect.get_height());
+    } else {
+        src_left = static_cast<tjs_real>(DestRect.left);
+        src_top  = static_cast<tjs_real>(DestRect.top);
+        src_w    = static_cast<tjs_real>(DestRect.get_width());
+        src_h    = static_cast<tjs_real>(DestRect.get_height());
+    }
     if(src_w <= 0.0 || src_h <= 0.0) {
         src_left = 0.0;
         src_top  = 0.0;
@@ -229,6 +256,12 @@ void tTVPDrawDevice::RemoveLayerManager(iTVPLayerManager *manager) {
 
 //---------------------------------------------------------------------------
 void tTVPDrawDevice::SetDestRectangle(const tTVPRect &rect) { DestRect = rect; }
+//---------------------------------------------------------------------------
+
+void tTVPDrawDevice::SetViewport(const tTVPRect &rect) {
+    ViewportRect = rect;
+    ViewportValid = (rect.get_width() > 0 && rect.get_height() > 0);
+}
 //---------------------------------------------------------------------------
 
 void tTVPDrawDevice::SetLockedSize(tjs_int w, tjs_int h) {

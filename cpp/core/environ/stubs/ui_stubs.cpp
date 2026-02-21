@@ -58,10 +58,10 @@ public:
     // -- Pure virtual implementations --
 
     void SetPaintBoxSize(tjs_int w, tjs_int h) override {
-        // When the primary layer is resized, propagate the current
-        // EGL surface dimensions as DestRect to the DrawDevice so
-        // that TransformToPrimaryLayerManager can correctly map
-        // surface-pixel coordinates → primary-layer coordinates.
+        // Only set WindowSize here — DestRect is exclusively managed by
+        // UpdateDrawBuffer() which knows the correct letterbox viewport.
+        // Setting DestRect here would overwrite the viewport offset and
+        // cause mouse Y-axis misalignment.
         if (!owner_) return;
         auto* dd = owner_->GetDrawDevice();
         if (!dd) return;
@@ -72,13 +72,6 @@ public:
         if (surf_w <= 0) surf_w = w;
         if (surf_h <= 0) surf_h = h;
 
-        tTVPRect dest;
-        dest.left = 0;
-        dest.top  = 0;
-        dest.right  = surf_w;
-        dest.bottom = surf_h;
-        dd->SetDestRectangle(dest);
-        dd->SetClipRectangle(dest);
         dd->SetWindowSize(surf_w, surf_h);
         spdlog::debug("FlutterWindowLayer::SetPaintBoxSize: layer={}x{}, surface={}x{}",
                       w, h, surf_w, surf_h);
@@ -223,6 +216,7 @@ public:
                 dest.bottom = static_cast<tjs_int>(vpY + vpH);
                 dd->SetDestRectangle(dest);
                 dd->SetClipRectangle(dest);
+                dd->SetViewport(dest);
                 dd->SetWindowSize(static_cast<tjs_int>(fbW),
                                   static_cast<tjs_int>(fbH));
             }

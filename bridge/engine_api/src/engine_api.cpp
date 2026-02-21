@@ -817,20 +817,13 @@ engine_result_t engine_set_surface_size(engine_handle_t handle,
       }
     }
 
-    // Synchronize DrawDevice's DestRect/WindowSize so that
-    // TransformToPrimaryLayerManager maps surface→layer correctly.
-    // This is the authoritative update — called every time Flutter
-    // resizes the surface, which covers window resize, DPR changes, etc.
+    // Only update WindowSize here — DestRect is exclusively managed by
+    // UpdateDrawBuffer() which calculates the correct letterbox viewport.
+    // Setting DestRect here would overwrite the viewport offset and cause
+    // mouse Y-axis misalignment when game aspect ratio != surface aspect ratio.
     if (TVPMainWindow) {
       auto* dd = TVPMainWindow->GetDrawDevice();
       if (dd) {
-        tTVPRect dest;
-        dest.left   = 0;
-        dest.top    = 0;
-        dest.right  = static_cast<tjs_int>(width);
-        dest.bottom = static_cast<tjs_int>(height);
-        dd->SetDestRectangle(dest);
-        dd->SetClipRectangle(dest);
         dd->SetWindowSize(static_cast<tjs_int>(width),
                           static_cast<tjs_int>(height));
       }
@@ -1169,17 +1162,13 @@ engine_result_t engine_set_render_target_iosurface(engine_handle_t handle,
     spdlog::info("engine_set_render_target_iosurface: attached id={} {}x{}",
                  iosurface_id, width, height);
 
-    // Update DrawDevice so coordinate transform uses IOSurface dimensions
+    // Only update WindowSize here — DestRect is exclusively managed by
+    // UpdateDrawBuffer() which calculates the correct letterbox viewport.
+    // Setting DestRect here would overwrite the viewport offset and cause
+    // mouse Y-axis misalignment when game aspect ratio != surface aspect ratio.
     if (TVPMainWindow) {
       auto* dd = TVPMainWindow->GetDrawDevice();
       if (dd) {
-        tTVPRect dest;
-        dest.left   = 0;
-        dest.top    = 0;
-        dest.right  = static_cast<tjs_int>(width);
-        dest.bottom = static_cast<tjs_int>(height);
-        dd->SetDestRectangle(dest);
-        dd->SetClipRectangle(dest);
         dd->SetWindowSize(static_cast<tjs_int>(width),
                           static_cast<tjs_int>(height));
       }

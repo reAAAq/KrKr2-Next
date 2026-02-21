@@ -96,6 +96,12 @@ public:
     virtual void SetDestRectangle(const tTVPRect &rect) = 0;
 
     virtual void SetWindowSize(tjs_int w, tjs_int h) = 0;
+
+    //! @brief		(Window->DrawDevice) Set the active viewport rectangle
+    //! @note		The viewport defines the sub-region of the surface where
+    //!         	game content is rendered (accounting for letterbox/pillarbox).
+    //!         	Used for coordinate transformation (surface→layer).
+    virtual void SetViewport(const tTVPRect &rect) {}
     //! @brief		(Window->DrawDevice) クリッピング矩形の設定
     //! @note
     //! ウィンドウから、描画先をクリッピングするための矩形を設定するために呼ばれる。
@@ -533,6 +539,8 @@ protected:
     size_t PrimaryLayerManagerIndex; //!< プライマリレイヤマネージャ
     std::vector<iTVPLayerManager *> Managers; //!< レイヤマネージャの配列
     tTVPRect DestRect; //!< 描画先位置
+    tTVPRect ViewportRect; //!< Active viewport for coordinate transforms
+    bool ViewportValid = false; //!< Whether ViewportRect has been set
     tjs_int SrcWidth{}, SrcHeight{};
     tjs_int WinWidth{}, WinHeight{};
     tjs_int LockedWidth = 0, LockedHeight = 0;
@@ -589,6 +597,7 @@ public:
     //---- 描画位置・サイズ関連
     void SetDestRectangle(const tTVPRect &rect) override;
     void SetWindowSize(tjs_int w, tjs_int h) override;
+    void SetViewport(const tTVPRect &rect) override;
     void SetClipRectangle(const tTVPRect &rect) override;
     void GetSrcSize(tjs_int &w, tjs_int &h) override;
     void NotifyLayerResize(iTVPLayerManager *manager) override;
