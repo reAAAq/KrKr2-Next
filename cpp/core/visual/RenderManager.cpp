@@ -4928,9 +4928,16 @@ iTVPRenderManager *TVPGetRenderManager(const ttstr &name) {
 iTVPRenderManager *TVPGetRenderManager() {
     static iTVPRenderManager *_RenderManager;
     if(!_RenderManager) {
-        ttstr str =
-            IndividualConfigManager::GetInstance()->GetValue<std::string>(
-                "renderer", "opengl");
+        // Prefer command-line option set via engine_set_option
+        tTJSVariant val;
+        ttstr str;
+        if(TVPGetCommandLine(TJS_W("renderer"), &val)) {
+            str = val;
+        }
+        if(str.IsEmpty()) {
+            str = IndividualConfigManager::GetInstance()
+                      ->GetValue<std::string>("renderer", "opengl");
+        }
         _RenderManager = TVPGetRenderManager(str);
     }
     return _RenderManager;
