@@ -20,6 +20,13 @@
 #include "StorageImpl.h"
 #include "BinaryStream.h"
 #include <spdlog/spdlog.h>
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#if TARGET_OS_IOS
+#include <CoreText/CoreText.h>
+#include <CoreFoundation/CoreFoundation.h>
+#endif
+#endif
 
 tTJSHashTable<ttstr, TVPFontNamePathInfo, tTVPttstrHash> TVPFontNames;
 static ttstr TVPDefaultFontName;
@@ -219,6 +226,13 @@ void TVPInitFontNames() {
         if(TVPEnumFontsProc(TJS_W("file://./c/Windows/Fonts/simhei.ttf")))
             break;
 #elif defined(__APPLE__)
+#if TARGET_OS_IOS
+        // iOS: system fonts cannot be accessed via the engine's file://
+        // storage system due to sandbox and path-normalization (lowercase).
+        // Use direct POSIX reads via tryReadFont below instead.
+        // (falls through to the "internal storage" block)
+#else
+        // macOS: system fonts are accessible via the engine's storage layer
         if(TVPEnumFontsProc(TJS_W("file://./System/Library/Fonts/PingFang.ttc")))
             break;
         if(TVPEnumFontsProc(
@@ -228,8 +242,9 @@ void TVPInitFontNames() {
                TJS_W("file://./System/Library/Fonts/Supplemental/Arial Unicode.ttf")))
             break;
 #endif
+#endif
 
-        { // from internal storage
+        { // from internal storage (or system fonts on iOS)
             // Read font file using standard file I/O
             auto tryReadFont = [](const std::string &path) -> std::vector<uint8_t> {
                 std::ifstream ifs(path, std::ios::binary | std::ios::ate);
@@ -241,6 +256,69 @@ void TVPInitFontNames() {
                 ifs.read(reinterpret_cast<char*>(data.data()), size);
                 return data;
             };
+
+            // Helper: load a font from POSIX path and register it.
+            auto tryLoadFontDirect = [&tryReadFont](const std::string &path,
+                                                     const std::string &label) -> bool {
+                auto fdata = tryReadFont(path);
+                if (fdata.empty()) return false;
+                spdlog::info("loaded system font: {}", path);
+                return TVPInternalEnumFonts(
+                    fdata.data(), fdata.size(), label.c_str(),
+                    [&tryReadFont](TVPFontNamePathInfo *info) -> tTJSBinaryStream * {
+                        auto d = tryReadFont(info->Path.AsStdString());
+                        if (d.empty()) return nullptr;
+                        auto *ret = new tTVPMemoryStream();
+                        ret->WriteBuffer(d.data(), d.size());
+                        ret->SetPosition(0);
+                        return ret;
+                    }) > 0;
+            };
+
+#if defined(__APPLE__) && TARGET_OS_IOS
+            // iOS: use CoreText API to get system font data (sandbox-safe).
+            {
+                // Preferred font names in order: Hiragino Sans (JP), PingFang SC (CN)
+                static const char *preferredFonts[] = {
+                    "HiraginoSans-W3",
+                    "PingFangSC-Regular",
+                    "HiraMinProN-W3",
+                    nullptr
+                };
+                bool loaded = false;
+                for (const char **fname = preferredFonts; *fname && !loaded; ++fname) {
+                    CFStringRef fontName = CFStringCreateWithCString(
+                        kCFAllocatorDefault, *fname, kCFStringEncodingUTF8);
+                    if (!fontName) continue;
+
+                    CTFontRef ctFont = CTFontCreateWithName(fontName, 12.0, nullptr);
+                    CFRelease(fontName);
+                    if (!ctFont) continue;
+
+                    // Get the font URL from the CTFont descriptor
+                    CTFontDescriptorRef desc = CTFontCopyFontDescriptor(ctFont);
+                    CFURLRef fontURL = desc
+                        ? (CFURLRef)CTFontDescriptorCopyAttribute(desc, kCTFontURLAttribute)
+                        : nullptr;
+
+                    if (fontURL) {
+                        char pathBuf[1024];
+                        if (CFURLGetFileSystemRepresentation(fontURL, true,
+                                (UInt8 *)pathBuf, sizeof(pathBuf))) {
+                            std::string fontPath(pathBuf);
+                            spdlog::info("iOS CoreText font path: {}", fontPath);
+                            if (tryLoadFontDirect(fontPath, fontPath)) {
+                                loaded = true;
+                            }
+                        }
+                        CFRelease(fontURL);
+                    }
+                    if (desc) CFRelease(desc);
+                    CFRelease(ctFont);
+                }
+                if (loaded) break;
+            }
+#endif
 
             auto data = tryReadFont("NotoSansCJK-Regular.ttc");
             if (data.empty()) {

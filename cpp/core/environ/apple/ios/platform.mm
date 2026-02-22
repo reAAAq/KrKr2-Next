@@ -21,6 +21,8 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 
+#include <spdlog/spdlog.h>
+
 #include "StorageImpl.h"
 #include "EventIntf.h"
 #include "Platform.h"
@@ -200,60 +202,114 @@ tjs_int TVPGetSystemFreeMemory() {
 
 // ---- UI dialogs (UIKit) ----
 
+// Helper: find the topmost view controller for presenting alerts.
+static UIViewController *TVPFindTopViewController() {
+    UIWindow *window = nil;
+    for (UIWindowScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (scene.activationState == UISceneActivationStateForegroundActive) {
+            for (UIWindow *w in scene.windows) {
+                if (w.isKeyWindow) {
+                    window = w;
+                    break;
+                }
+            }
+        }
+        if (window) break;
+    }
+    UIViewController *rootVC = window.rootViewController;
+    while (rootVC.presentedViewController) {
+        rootVC = rootVC.presentedViewController;
+    }
+    return rootVC;
+}
+
 int TVPShowSimpleMessageBox(const ttstr &text, const ttstr &caption,
                             const std::vector<ttstr> &vecButtons) {
     __block int selectedIndex = -1;
-    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
     std::string utf8Text = text.AsStdString();
     std::string utf8Caption = caption.AsStdString();
+    // Copy button labels for use in the block
+    std::vector<std::string> utf8Buttons;
+    utf8Buttons.reserve(vecButtons.size());
+    for (const auto &btn : vecButtons) {
+        utf8Buttons.emplace_back(btn.AsStdString());
+    }
 
-    dispatch_async(dispatch_get_main_queue(), ^{
+    // Block that creates and presents the alert.
+    auto showAlert = ^{
         UIAlertController *alert = [UIAlertController
             alertControllerWithTitle:[NSString stringWithUTF8String:utf8Caption.c_str()]
             message:[NSString stringWithUTF8String:utf8Text.c_str()]
             preferredStyle:UIAlertControllerStyleAlert];
 
-        for (int i = 0; i < (int)vecButtons.size(); i++) {
-            std::string utf8Button = vecButtons[i].AsStdString();
+        // When called on the main thread we use a run-loop based wait
+        // instead of a semaphore to avoid deadlocking.
+        __block BOOL dismissed = NO;
+
+        for (int i = 0; i < (int)utf8Buttons.size(); i++) {
+            const std::string &label = utf8Buttons[i];
             [alert addAction:[UIAlertAction
-                actionWithTitle:[NSString stringWithUTF8String:utf8Button.c_str()]
+                actionWithTitle:[NSString stringWithUTF8String:label.c_str()]
                 style:UIAlertActionStyleDefault
                 handler:^(UIAlertAction *action) {
                     selectedIndex = i;
-                    dispatch_semaphore_signal(sem);
+                    dismissed = YES;
                 }]];
         }
 
-        // Find the root view controller to present the alert
-        UIWindow *window = nil;
-        for (UIWindowScene *scene in UIApplication.sharedApplication.connectedScenes) {
-            if (scene.activationState == UISceneActivationStateForegroundActive) {
-                for (UIWindow *w in scene.windows) {
-                    if (w.isKeyWindow) {
-                        window = w;
-                        break;
-                    }
-                }
-            }
-            if (window) break;
-        }
-
-        UIViewController *rootVC = window.rootViewController;
-        // Walk to the topmost presented controller
-        while (rootVC.presentedViewController) {
-            rootVC = rootVC.presentedViewController;
-        }
-
+        UIViewController *rootVC = TVPFindTopViewController();
         if (rootVC) {
             [rootVC presentViewController:alert animated:YES completion:nil];
+            // Spin the run loop until the user dismisses the alert.
+            // This keeps the UI responsive and avoids the semaphore deadlock.
+            while (!dismissed) {
+                [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
+                                         beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+            }
         } else {
-            // Fallback: signal immediately if no VC available
-            dispatch_semaphore_signal(sem);
+            // No VC available — just log and return immediately
+            spdlog::warn("TVPShowSimpleMessageBox: no root view controller available, cannot present alert");
+            selectedIndex = 0;
         }
-    });
+    };
 
-    dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+    if ([NSThread isMainThread]) {
+        // Already on the main thread — present directly to avoid deadlock.
+        showAlert();
+    } else {
+        // Off the main thread — dispatch and wait via semaphore.
+        dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            // Wrap the alert so the semaphore is signalled after dismissal.
+            __block BOOL dismissed = NO;
+
+            UIAlertController *alert = [UIAlertController
+                alertControllerWithTitle:[NSString stringWithUTF8String:utf8Caption.c_str()]
+                message:[NSString stringWithUTF8String:utf8Text.c_str()]
+                preferredStyle:UIAlertControllerStyleAlert];
+
+            for (int i = 0; i < (int)utf8Buttons.size(); i++) {
+                const std::string &label = utf8Buttons[i];
+                [alert addAction:[UIAlertAction
+                    actionWithTitle:[NSString stringWithUTF8String:label.c_str()]
+                    style:UIAlertActionStyleDefault
+                    handler:^(UIAlertAction *action) {
+                        selectedIndex = i;
+                        dispatch_semaphore_signal(sem);
+                    }]];
+            }
+
+            UIViewController *rootVC = TVPFindTopViewController();
+            if (rootVC) {
+                [rootVC presentViewController:alert animated:YES completion:nil];
+            } else {
+                dispatch_semaphore_signal(sem);
+            }
+        });
+        dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+    }
+
     return selectedIndex;
 }
 

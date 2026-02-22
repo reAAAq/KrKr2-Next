@@ -26,7 +26,7 @@ Pod::Spec.new do |s|
   s.frameworks = 'IOSurface', 'CoreVideo', 'Metal', 'QuartzCore', 'Accelerate',
                  'AudioToolbox', 'AVFoundation', 'CoreAudio', 'CoreFoundation',
                  'CoreGraphics', 'CoreMotion', 'CoreMedia', 'CoreBluetooth',
-                 'Foundation', 'UIKit', 'OpenGLES', 'VideoToolbox', 'Security'
+                 'CoreText', 'Foundation', 'UIKit', 'OpenGLES', 'VideoToolbox', 'Security'
 
   s.weak_frameworks = 'GameController', 'CoreHaptics'
 
