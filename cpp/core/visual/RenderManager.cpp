@@ -4930,7 +4930,7 @@ iTVPRenderManager *TVPGetRenderManager() {
     if(!_RenderManager) {
         ttstr str =
             IndividualConfigManager::GetInstance()->GetValue<std::string>(
-                "renderer", "software");
+                "renderer", "opengl");
         _RenderManager = TVPGetRenderManager(str);
     }
     return _RenderManager;

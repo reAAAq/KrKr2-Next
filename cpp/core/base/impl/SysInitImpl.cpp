@@ -290,7 +290,7 @@ void TVPAfterSystemInit() {
     // check TVPGraphicSplitOperation option
     std::string _val =
         IndividualConfigManager::GetInstance()->GetValue<std::string>(
-            "renderer", "software");
+            "renderer", "opengl");
     if(_val != "software") {
         TVPGraphicSplitOperationType = gsotNone;
     } else {
