@@ -912,28 +912,30 @@ bool tTVPBaseBitmap::CopyRect(tjs_int x, tjs_int y, const iTVPBaseBitmap *ref,
         }
         TVPEndThreadTask();
 #endif
+    // Fall back to software path if source and destination use different
+    // render managers (prevents type-mismatch crashes between OGL and software).
+    iTVPRenderManager *mgr = GetRenderManager();
+    iTVPRenderManager *src_mgr = const_cast<iTVPBaseBitmap*>(
+        static_cast<const iTVPBaseBitmap*>(ref))->GetRenderManager();
+    if (mgr != src_mgr) {
+        mgr = TVPGetSoftwareRenderManager();
+    }
     iTVPRenderMethod *method;
     switch(plane) {
         case TVP_BB_COPY_MAIN: {
-            static iTVPRenderMethod *_method =
-                GetRenderManager()->GetRenderMethod("CopyColor");
-            method = _method;
+            method = mgr->GetRenderMethod("CopyColor");
         } break;
         case TVP_BB_COPY_MASK: {
-            static iTVPRenderMethod *_method =
-                GetRenderManager()->GetRenderMethod("CopyMask");
-            method = _method;
+            method = mgr->GetRenderMethod("CopyMask");
         } break;
         case TVP_BB_COPY_MAIN | TVP_BB_COPY_MASK: {
-            static iTVPRenderMethod *_method =
-                GetRenderManager()->GetRenderMethod("Copy");
-            method = _method;
+            method = mgr->GetRenderMethod("Copy");
         } break;
     }
     tRenderTexRectArray::Element src_tex[] = { tRenderTexRectArray::Element(
         ref->GetTexture(), refrect) };
     iTVPTexture2D *reftex = GetTexture();
-    GetRenderManager()->OperateRect(
+    mgr->OperateRect(
         method, GetTextureForRender(method->IsBlendTarget(), &rect), reftex,
         rect, tRenderTexRectArray(src_tex));
 
@@ -1479,7 +1481,15 @@ bool iTVPBaseBitmap::Blt(tjs_int x, tjs_int y, const iTVPBaseBitmap *ref,
 
     tRenderTexRectArray::Element src_tex[] = { tRenderTexRectArray::Element(
         ref->GetTexture(), refrect) };
+    // Use this bitmap's render manager, but if the source bitmap comes from a
+    // different render manager (e.g. software vs opengl), fall back to the
+    // software render manager to avoid type-mismatch crashes.
     iTVPRenderManager *mgr = GetRenderManager();
+    iTVPRenderManager *src_mgr = const_cast<iTVPBaseBitmap*>(
+        static_cast<const iTVPBaseBitmap*>(ref))->GetRenderManager();
+    if (mgr != src_mgr) {
+        mgr = TVPGetSoftwareRenderManager();
+    }
     iTVPRenderMethod *rmethod = mgr->GetRenderMethod(opa, hda, method);
     if(!rmethod)
         return false;
@@ -2349,7 +2359,14 @@ bool iTVPBaseBitmap::StretchBlt(tTVPRect cliprect, tTVPRect destrect,
 
     tRenderTexRectArray::Element src_tex[] = { tRenderTexRectArray::Element(
         ref->GetTexture(), refrect) };
+    // Fall back to software path if source and destination use different
+    // render managers (prevents type-mismatch crashes between OGL and software).
     iTVPRenderManager *mgr = GetRenderManager();
+    iTVPRenderManager *src_mgr = const_cast<iTVPBaseBitmap*>(
+        static_cast<const iTVPBaseBitmap*>(ref))->GetRenderManager();
+    if (mgr != src_mgr) {
+        mgr = TVPGetSoftwareRenderManager();
+    }
     iTVPRenderMethod *rmethod = mgr->GetRenderMethod(opa, hda, method);
     if(!rmethod)
         return false;
@@ -4016,7 +4033,14 @@ bool iTVPBaseBitmap::AffineBlt(tTVPRect destrect, const iTVPBaseBitmap *ref,
     static int StretchTypeId =
         TVPGetRenderManager()->EnumParameterID("StretchType");
     TVPGetRenderManager()->SetParameterInt(StretchTypeId, (int)type);
+    // Fall back to software path if source and destination use different
+    // render managers (prevents type-mismatch crashes between OGL and software).
     iTVPRenderManager *mgr = GetRenderManager();
+    iTVPRenderManager *src_mgr = const_cast<iTVPBaseBitmap*>(
+        static_cast<const iTVPBaseBitmap*>(ref))->GetRenderManager();
+    if (mgr != src_mgr) {
+        mgr = TVPGetSoftwareRenderManager();
+    }
     iTVPRenderMethod *_method = mgr->GetRenderMethod(opa, hda, method);
     if(!_method)
         return false;
