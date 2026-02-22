@@ -9,6 +9,7 @@ vcpkg_from_github(
         0001-fix-mac.patch
         0001-fix-quartz-api.patch
         0001-fix-linux.patch
+        0001-fix-ios-no-carbon.patch
 )
 
 file(COPY "${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt" DESTINATION "${SOURCE_PATH}")
@@ -20,7 +21,7 @@ vcpkg_add_to_path("${PKGCONFIG_PATH}")
 
 if(VCPKG_TARGET_IS_LINUX)
     set(OPTIONS -DWITH_X11=ON)
-elseif (VCPKG_TARGET_IS_ANDROID OR VCPKG_TARGET_IS_OSX)
+elseif (VCPKG_TARGET_IS_ANDROID OR VCPKG_TARGET_IS_OSX OR VCPKG_TARGET_IS_IOS)
     set(OPTIONS -DWITH_PANGO=OFF)
 endif()
 

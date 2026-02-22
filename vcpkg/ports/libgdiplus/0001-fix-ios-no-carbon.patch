@@ -1,0 +1,41 @@
+diff --git a/src/carbon-private.c b/src/carbon-private.c
+index b8a2c72..b3ae6db 100644
+--- a/src/carbon-private.c
++++ b/src/carbon-private.c
+@@ -22,7 +22,9 @@
+  *   Geoff Norton  <gnorton@novell.com>
+  */
+ 
+-#ifdef __APPLE__
++#include <TargetConditionals.h>
++
++#if defined(__APPLE__) && TARGET_OS_OSX
+ #include <Carbon/Carbon.h>
+ #include <IOKit/graphics/IOGraphicsLib.h>
+ 
+diff --git a/src/carbon-private.h b/src/carbon-private.h
+index 89309e0..1661054 100644
+--- a/src/carbon-private.h
++++ b/src/carbon-private.h
+@@ -23,7 +23,7 @@
+ #ifndef __CARBON_PRIVATE_H__
+ #define __CARBON_PRIVATE_H__
+ 
+-#ifdef __APPLE__
++#if defined(__APPLE__) && defined(TARGET_OS_OSX) && TARGET_OS_OSX
+ void gdip_get_display_dpi_carbon (float *h_dpi, float *v_dpi);
+ #endif
+ 
+diff --git a/src/general.c b/src/general.c
+index 61682ae..5c5b522 100644
+--- a/src/general.c
++++ b/src/general.c
+@@ -126,7 +126,7 @@ gdip_get_display_dpi ()
+ 	static float dpis = 0;
+ 
+ 	if (dpis == 0) {
+-#if __APPLE__
++#if defined(__APPLE__) && TARGET_OS_OSX
+ 		float h_dpi, v_dpi;
+ 		gdip_get_display_dpi_carbon (&h_dpi, &v_dpi);
+ 
