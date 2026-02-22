@@ -19,11 +19,7 @@
 
 ## 简介
 
-**krkr2-flutter** 是 KrKr2 模拟器的现代化重构版本，用于运行基于 **KiriKiri 引擎**（又称 T Visual Presenter）开发的视觉小说游戏。KiriKiri 引擎最初设计于 21 世纪初，其架构和性能策略基于当时的硬件特性——单核 CPU、有限内存、固定功能 GPU。本项目在保留引擎核心兼容性的同时，对渲染管线、SIMD 指令集、内存管理、脚本虚拟机等模块进行全面现代化改造，以充分利用当今多核 CPU、宽 SIMD 指令集和可编程 GPU 的能力。使用 Flutter 框架替换所有非核心引擎组件，通过 FFI/Platform Channel 桥接原生 C++ 引擎，并借助 [ANGLE](https://chromium.googlesource.com/angle/angle) 图形抽象层支持 Metal、Vulkan、Direct3D 11 等现代图形 API，实现跨 macOS、Windows、Linux、Android 等平台的高性能渲染。
-
-## 当前进展
-
-项目已完成从传统 OpenGL 渲染管线到现代图形 API 的全面迁移。引擎渲染层通过 ANGLE 统一抽象，在各平台自动选择最优图形后端——macOS 使用 **Metal**、Windows 使用 **Direct3D 11**、Linux 使用 **Vulkan**，并通过平台原生纹理共享机制（IOSurface / D3D11 Texture / DMA-BUF）实现引擎渲染帧到 Flutter 的零拷贝传递。模拟器 UI 正在基于 Flutter 框架持续构建中。
+**KrKr2 Next** 是 [KiriKiri2 (吉里吉里2)](https://zh.wikipedia.org/wiki/%E5%90%89%E9%87%8C%E5%90%89%E9%87%8C2) 视觉小说引擎的现代化跨平台运行环境。它完全兼容原版游戏脚本，使用现代图形接口进行硬件加速渲染，并在渲染性能和脚本执行效率上做了大量优化。基于 Flutter 构建统一的跨平台界面，支持 macOS · iOS · Windows · Linux · Android 五大平台。
 
 下图为当前在 macOS 上通过 Metal 后端运行的实际效果：
 
@@ -31,7 +27,7 @@
   <img src="doc/1.png" alt="macOS Metal 后端运行截图" width="800">
 </p>
 
-## 技术架构
+## 架构
 
 <p align="center">
   <img src="doc/architecture.png" alt="技术架构图" width="700">
@@ -56,7 +52,7 @@ krkr2/
 └── tools/                   # 辅助工具 (xp3 解包等)
 ```
 
-## 开发状态
+## 开发进度
 
 > ⚠️ 本项目处于活跃开发阶段，尚未发布稳定版本。macOS 平台进度领先。
 
@@ -65,21 +61,30 @@ krkr2/
 | C++ 引擎核心编译 | ✅ 完成 | KiriKiri2 核心引擎全平台可编译 |
 | ANGLE 渲染层迁移 | ✅ 基本完成 | 替代原 Cocos2d-x + GLFW 渲染管线，使用 EGL/GLES 离屏渲染 |
 | engine_api 桥接层 | ✅ 完成 | 导出 `engine_create` / `engine_tick` / `engine_destroy` 等 C API |
-| Flutter Plugin (macOS) | ✅ 基本完成 | Platform Channel 通信、Texture 纹理桥接 |
-| macOS Texture 模式 | ✅ 基本完成 | 通过 IOSurface 零拷贝共享引擎渲染帧到 Flutter Texture Widget |
+| Flutter Plugin | ✅ 基本完成 | Platform Channel 通信、Texture 纹理桥接 |
+| Texture 零拷贝渲染 | ✅ 基本完成 | 通过平台原生纹理共享机制零拷贝传递引擎渲染帧到 Flutter |
 | Flutter 调试 UI | ✅ 基本完成 | FPS 控制、引擎生命周期管理、渲染状态监控 |
 | 输入事件转发 | ✅ 基本完成 | 鼠标 / 触控事件坐标映射转发到引擎 |
-| Windows 平台 | 📋 计划中 | Plugin 骨架已创建，ANGLE D3D11 后端待适配 |
-| Linux 平台 | 📋 计划中 | Plugin 骨架已创建，ANGLE Vulkan/Desktop GL 后端待适配 |
-| Android 平台 | 📋 计划中 | 原有 Android 代码待迁移整合 |
+| 引擎性能优化 | 🔨 进行中 | SIMD 像素混合、GPU 合成管线、VM 解释器优化等 |
+| 原有 krkr2 模拟器功能移植 | 📋 规划中 | 将原有 krkr2 模拟器功能逐步移植到新架构 |
 | 游戏兼容性测试 | 📋 计划中 | 待多平台渲染稳定后进行 |
+
+## 平台支持状态
+
+| 平台 | 状态 | 图形后端 | 纹理共享机制 |
+|------|------|----------|-------------|
+| macOS | ✅ 基本完成 | Metal | IOSurface |
+| iOS | 🔨 进行中 | Metal | IOSurface |
+| Windows | 📋 计划中 | Direct3D 11 | D3D11 Texture |
+| Linux | 📋 计划中 | Vulkan / Desktop GL | DMA-BUF |
+| Android | 📋 计划中 | OpenGL ES / Vulkan | HardwareBuffer |
 
 ## 引擎性能优化
 
 | 优先级 | 任务 | 状态 |
 |--------|------|------|
 | P0 | 像素混合 SIMD 化 ([Highway](https://github.com/google/highway)) | ✅ 完成 |
-| P0 | 全 GPU 合成渲染管线 | � 进行中 |
+| P0 | 全 GPU 合成渲染管线 | 🔨 进行中 |
 | P0 | TJS2 VM 解释器优化 (computed goto) | 📋 计划中 |
 | P1 | 事件系统重构 (lock-free 队列) | 📋 计划中 |
 | P1 | 图像加载线程池化 | 📋 计划中 |
@@ -87,7 +92,6 @@ krkr2/
 | P2 | 引用计数 → 智能指针 | 📋 计划中 |
 | P2 | 自定义容器 → 现代容器 | 📋 计划中 |
 | P2 | XP3 归档 zstd 支持 | 📋 计划中 |
-
 ## 许可证
 
 本项目基于 MIT 许可证开源，详见 [LICENSE](./LICENSE)。

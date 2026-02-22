@@ -19,11 +19,7 @@
 
 ## Overview
 
-**krkr2-flutter** is a modernized rewrite of the KrKr2 emulator, designed to run visual novel games built with the **KiriKiri engine** (a.k.a. T Visual Presenter). The KiriKiri engine was originally designed in the early 2000s, with its architecture and performance strategies tailored to the hardware of that era — single-core CPUs, limited memory, and fixed-function GPUs. This project preserves the engine's core compatibility while comprehensively modernizing the rendering pipeline, SIMD instruction sets, memory management, and script virtual machine to fully leverage today's multi-core CPUs, wide SIMD instruction sets, and programmable GPUs. It replaces all non-core engine components with the Flutter framework, bridging the native C++ engine via FFI / Platform Channels. The graphics layer is powered by [ANGLE](https://chromium.googlesource.com/angle/angle), which provides a unified abstraction supporting modern graphics APIs such as Metal, Vulkan, and Direct3D 11, enabling high-performance rendering across macOS, Windows, Linux, Android and more.
-
-## Current Progress
-
-The project has completed a full migration from the legacy OpenGL rendering pipeline to modern graphics APIs. The engine rendering layer is now unified through ANGLE, which automatically selects the optimal graphics backend on each platform — **Metal** on macOS, **Direct3D 11** on Windows, and **Vulkan** on Linux. Engine render frames are delivered to Flutter via platform-native texture sharing mechanisms (IOSurface / D3D11 Texture / DMA-BUF) with zero-copy transfer. The emulator UI is being actively built on the Flutter framework.
+**KrKr2 Next** is a modern, cross-platform runtime for the [KiriKiri2](https://en.wikipedia.org/wiki/KiriKiri) visual novel engine. It is fully compatible with original game scripts, uses modern graphics APIs for hardware-accelerated rendering, and includes numerous optimizations for both rendering performance and script execution. Built on Flutter for a unified cross-platform UI, it targets macOS · iOS · Windows · Linux · Android.
 
 The screenshot below shows the current running state on macOS with the Metal backend:
 
@@ -56,7 +52,7 @@ krkr2/
 └── tools/                   # Utilities (xp3 unpacker, etc.)
 ```
 
-## Development Status
+## Development Progress
 
 > ⚠️ This project is under active development. No stable release is available yet. macOS is the most advanced platform.
 
@@ -65,14 +61,23 @@ krkr2/
 | C++ Engine Core Build | ✅ Done | KiriKiri2 core engine compiles on all platforms |
 | ANGLE Rendering Migration | ✅ Mostly Done | Replaced legacy Cocos2d-x + GLFW pipeline with EGL/GLES offscreen rendering |
 | engine_api Bridge Layer | ✅ Done | Exports `engine_create` / `engine_tick` / `engine_destroy` C APIs |
-| Flutter Plugin (macOS) | ✅ Mostly Done | Platform Channel communication, Texture bridge |
-| macOS Texture Mode | ✅ Mostly Done | Zero-copy sharing of engine render frames to Flutter Texture Widget via IOSurface |
+| Flutter Plugin | ✅ Mostly Done | Platform Channel communication, Texture bridge |
+| Zero-Copy Texture Rendering | ✅ Mostly Done | Zero-copy engine render frame sharing to Flutter via platform-native texture mechanisms |
 | Flutter Debug UI | ✅ Mostly Done | FPS control, engine lifecycle management, rendering status monitor |
 | Input Event Forwarding | ✅ Mostly Done | Mouse / touch event coordinate mapping and forwarding to the engine |
-| Windows | 📋 Planned | Plugin skeleton created, ANGLE D3D11 backend pending adaptation |
-| Linux | 📋 Planned | Plugin skeleton created, ANGLE Vulkan/Desktop GL backend pending adaptation |
-| Android | 📋 Planned | Legacy Android code pending migration |
+| Engine Performance Optimization | 🔨 In Progress | SIMD pixel blending, GPU compositing pipeline, VM interpreter optimization, etc. |
+| Original krkr2 Emulator Feature Porting | 📋 Planned | Gradually port original krkr2 emulator features to the new architecture |
 | Game Compatibility Testing | 📋 Planned | Pending stable multi-platform rendering |
+
+## Platform Support
+
+| Platform | Status | Graphics Backend | Texture Sharing |
+|----------|--------|-----------------|----------------|
+| macOS | ✅ Mostly Done | Metal | IOSurface |
+| iOS | 🔨 In Progress | Metal | IOSurface |
+| Windows | 📋 Planned | Direct3D 11 | D3D11 Texture |
+| Linux | 📋 Planned | Vulkan / Desktop GL | DMA-BUF |
+| Android | 📋 Planned | OpenGL ES / Vulkan | HardwareBuffer |
 
 ## Engine Performance Optimization
 
