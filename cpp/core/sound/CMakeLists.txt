@@ -5,7 +5,8 @@ set(SOUND_PATH ${CMAKE_CURRENT_LIST_DIR})
 set(SOUND_SOURCE_FILES
     ${SOUND_PATH}/CDDAIntf.cpp
     ${SOUND_PATH}/FFWaveDecoder.cpp
-    ${SOUND_PATH}/MathAlgorithms.cpp
+    # MathAlgorithms.cpp removed: same functions already defined in
+    # core_utils_module/MathAlgorithms_Default.cpp (linked via core_utils_module dep)
     ${SOUND_PATH}/MIDIIntf.cpp
     ${SOUND_PATH}/PhaseVocoderDSP.cpp
     ${SOUND_PATH}/PhaseVocoderFilter.cpp

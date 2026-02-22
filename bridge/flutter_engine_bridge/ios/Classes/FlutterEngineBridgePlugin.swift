@@ -183,10 +183,10 @@ public class FlutterEngineBridgePlugin: NSObject, FlutterPlugin {
 
   deinit {
     for (textureId, _) in textures {
-      registrar.textures.unregisterTexture(textureId)
+      registrar.textures().unregisterTexture(textureId)
     }
     for (textureId, _) in ioSurfaceTextures {
-      registrar.textures.unregisterTexture(textureId)
+      registrar.textures().unregisterTexture(textureId)
     }
   }
 
@@ -198,7 +198,7 @@ public class FlutterEngineBridgePlugin: NSObject, FlutterPlugin {
     // --- Legacy RGBA texture ---
     case "createTexture":
       let texture = EngineHostTexture()
-      let textureId = registrar.textures.register(texture)
+      let textureId = registrar.textures().register(texture)
       textures[textureId] = texture
       result(textureId)
 
@@ -252,7 +252,7 @@ public class FlutterEngineBridgePlugin: NSObject, FlutterPlugin {
         return
       }
 
-      registrar.textures.textureFrameAvailable(textureId)
+      registrar.textures().textureFrameAvailable(textureId)
       result(nil)
 
     case "disposeTexture":
@@ -270,7 +270,7 @@ public class FlutterEngineBridgePlugin: NSObject, FlutterPlugin {
       }
       let textureId = textureIdNumber.int64Value
       textures.removeValue(forKey: textureId)
-      registrar.textures.unregisterTexture(textureId)
+      registrar.textures().unregisterTexture(textureId)
       result(nil)
 
     // --- IOSurface zero-copy texture ---
@@ -303,7 +303,7 @@ public class FlutterEngineBridgePlugin: NSObject, FlutterPlugin {
         return
       }
 
-      let textureId = registrar.textures.register(texture)
+      let textureId = registrar.textures().register(texture)
       ioSurfaceTextures[textureId] = texture
       result([
         "textureId": textureId,
@@ -326,7 +326,7 @@ public class FlutterEngineBridgePlugin: NSObject, FlutterPlugin {
         return
       }
       let textureId = textureIdNumber.int64Value
-      registrar.textures.textureFrameAvailable(textureId)
+      registrar.textures().textureFrameAvailable(textureId)
       result(nil)
 
     case "resizeIOSurfaceTexture":
@@ -392,7 +392,7 @@ public class FlutterEngineBridgePlugin: NSObject, FlutterPlugin {
       }
       let textureId = textureIdNumber.int64Value
       ioSurfaceTextures.removeValue(forKey: textureId)
-      registrar.textures.unregisterTexture(textureId)
+      registrar.textures().unregisterTexture(textureId)
       result(nil)
 
     default:
