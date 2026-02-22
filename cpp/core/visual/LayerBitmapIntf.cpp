@@ -912,14 +912,8 @@ bool tTVPBaseBitmap::CopyRect(tjs_int x, tjs_int y, const iTVPBaseBitmap *ref,
         }
         TVPEndThreadTask();
 #endif
-    // Fall back to software path if source and destination use different
-    // render managers (prevents type-mismatch crashes between OGL and software).
+    // Always use this bitmap's own render manager.
     iTVPRenderManager *mgr = GetRenderManager();
-    iTVPRenderManager *src_mgr = const_cast<iTVPBaseBitmap*>(
-        static_cast<const iTVPBaseBitmap*>(ref))->GetRenderManager();
-    if (mgr != src_mgr) {
-        mgr = TVPGetSoftwareRenderManager();
-    }
     iTVPRenderMethod *method;
     switch(plane) {
         case TVP_BB_COPY_MAIN: {
@@ -932,12 +926,33 @@ bool tTVPBaseBitmap::CopyRect(tjs_int x, tjs_int y, const iTVPBaseBitmap *ref,
             method = mgr->GetRenderMethod("Copy");
         } break;
     }
+
+    // Convert source texture if it comes from a different render manager.
+    iTVPRenderManager *src_mgr = const_cast<iTVPBaseBitmap*>(
+        static_cast<const iTVPBaseBitmap*>(ref))->GetRenderManager();
+    iTVPTexture2D *src_tex_raw = ref->GetTexture();
+    iTVPTexture2D *converted_src = nullptr;
+    if (mgr != src_mgr) {
+        tjs_uint sw = ref->GetWidth();
+        tjs_uint sh = ref->GetHeight();
+        const void *srcpix = src_tex_raw->GetScanLineForRead(0);
+        if (srcpix) {
+            converted_src = mgr->CreateTexture2D(
+                srcpix, src_tex_raw->GetPitch(), sw, sh,
+                TVPTextureFormat::RGBA);
+            src_tex_raw = converted_src;
+        }
+    }
+
     tRenderTexRectArray::Element src_tex[] = { tRenderTexRectArray::Element(
-        ref->GetTexture(), refrect) };
+        src_tex_raw, refrect) };
     iTVPTexture2D *reftex = GetTexture();
     mgr->OperateRect(
         method, GetTextureForRender(method->IsBlendTarget(), &rect), reftex,
         rect, tRenderTexRectArray(src_tex));
+    if (converted_src) {
+        converted_src->Release();
+    }
 
     return true;
 }
@@ -1479,24 +1494,38 @@ bool iTVPBaseBitmap::Blt(tjs_int x, tjs_int y, const iTVPBaseBitmap *ref,
     if(refrect.top >= refrect.bottom)
         return false; // not drawable
 
-    tRenderTexRectArray::Element src_tex[] = { tRenderTexRectArray::Element(
-        ref->GetTexture(), refrect) };
-    // Use this bitmap's render manager, but if the source bitmap comes from a
-    // different render manager (e.g. software vs opengl), fall back to the
-    // software render manager to avoid type-mismatch crashes.
+    // Always use this bitmap's own render manager.
     iTVPRenderManager *mgr = GetRenderManager();
-    iTVPRenderManager *src_mgr = const_cast<iTVPBaseBitmap*>(
-        static_cast<const iTVPBaseBitmap*>(ref))->GetRenderManager();
-    if (mgr != src_mgr) {
-        mgr = TVPGetSoftwareRenderManager();
-    }
     iTVPRenderMethod *rmethod = mgr->GetRenderMethod(opa, hda, method);
     if(!rmethod)
         return false;
+
+    // Convert source texture if it comes from a different render manager.
+    iTVPRenderManager *src_mgr = const_cast<iTVPBaseBitmap*>(
+        static_cast<const iTVPBaseBitmap*>(ref))->GetRenderManager();
+    iTVPTexture2D *src_tex_raw = ref->GetTexture();
+    iTVPTexture2D *converted_src = nullptr;
+    if (mgr != src_mgr) {
+        tjs_uint sw = ref->GetWidth();
+        tjs_uint sh = ref->GetHeight();
+        const void *srcpix = src_tex_raw->GetScanLineForRead(0);
+        if (srcpix) {
+            converted_src = mgr->CreateTexture2D(
+                srcpix, src_tex_raw->GetPitch(), sw, sh,
+                TVPTextureFormat::RGBA);
+            src_tex_raw = converted_src;
+        }
+    }
+
+    tRenderTexRectArray::Element src_tex[] = { tRenderTexRectArray::Element(
+        src_tex_raw, refrect) };
     iTVPTexture2D *reftex = GetTexture();
     mgr->OperateRect(rmethod,
                      GetTextureForRender(rmethod->IsBlendTarget(), &rect),
                      reftex, rect, tRenderTexRectArray(src_tex));
+    if (converted_src) {
+        converted_src->Release();
+    }
 #if 0
         tjs_uint8 *dest = (tjs_uint8*)GetScanLineForWrite(0);
         const tjs_uint8 *src = (const tjs_uint8*)ref->GetScanLine(0);
@@ -2353,27 +2382,41 @@ bool iTVPBaseBitmap::StretchBlt(tTVPRect cliprect, tTVPRect destrect,
         destrect.bottom = cr.bottom;
     }
 
-    static int StretchTypeId =
-        TVPGetRenderManager()->EnumParameterID("StretchType");
-    TVPGetRenderManager()->SetParameterInt(StretchTypeId, (int)type);
-
-    tRenderTexRectArray::Element src_tex[] = { tRenderTexRectArray::Element(
-        ref->GetTexture(), refrect) };
-    // Fall back to software path if source and destination use different
-    // render managers (prevents type-mismatch crashes between OGL and software).
+    // Always use this bitmap's own render manager.
     iTVPRenderManager *mgr = GetRenderManager();
-    iTVPRenderManager *src_mgr = const_cast<iTVPBaseBitmap*>(
-        static_cast<const iTVPBaseBitmap*>(ref))->GetRenderManager();
-    if (mgr != src_mgr) {
-        mgr = TVPGetSoftwareRenderManager();
-    }
+    int StretchTypeId = mgr->EnumParameterID("StretchType");
+    mgr->SetParameterInt(StretchTypeId, (int)type);
+
     iTVPRenderMethod *rmethod = mgr->GetRenderMethod(opa, hda, method);
     if(!rmethod)
         return false;
+
+    // Convert source texture if it comes from a different render manager.
+    iTVPRenderManager *src_mgr = const_cast<iTVPBaseBitmap*>(
+        static_cast<const iTVPBaseBitmap*>(ref))->GetRenderManager();
+    iTVPTexture2D *src_tex_raw = ref->GetTexture();
+    iTVPTexture2D *converted_src = nullptr;
+    if (mgr != src_mgr) {
+        tjs_uint sw = ref->GetWidth();
+        tjs_uint sh = ref->GetHeight();
+        const void *srcpix = src_tex_raw->GetScanLineForRead(0);
+        if (srcpix) {
+            converted_src = mgr->CreateTexture2D(
+                srcpix, src_tex_raw->GetPitch(), sw, sh,
+                TVPTextureFormat::RGBA);
+            src_tex_raw = converted_src;
+        }
+    }
+
+    tRenderTexRectArray::Element src_tex[] = { tRenderTexRectArray::Element(
+        src_tex_raw, refrect) };
     iTVPTexture2D *reftex = GetTexture();
     mgr->OperateRect(rmethod,
                      GetTextureForRender(rmethod->IsBlendTarget(), &destrect),
                      reftex, destrect, tRenderTexRectArray(src_tex));
+    if (converted_src) {
+        converted_src->Release();
+    }
     return true;
 #if 0
 	//--- check mode and other conditions
@@ -4030,26 +4073,52 @@ bool iTVPBaseBitmap::AffineBlt(tTVPRect destrect, const iTVPBaseBitmap *ref,
     };
 
     auto type = (tTVPBBStretchType)(mode & stTypeMask);
-    static int StretchTypeId =
-        TVPGetRenderManager()->EnumParameterID("StretchType");
-    TVPGetRenderManager()->SetParameterInt(StretchTypeId, (int)type);
-    // Fall back to software path if source and destination use different
-    // render managers (prevents type-mismatch crashes between OGL and software).
+    // Always use this bitmap's own render manager. Do NOT fall back to
+    // software when source uses a different render manager, because the
+    // target textures (created by this->GetRenderManager()) would be
+    // incompatible with the fallback manager's OperateTriangles, which
+    // performs unsafe static_casts on textures.
+    //
+    // When the source bitmap comes from a different render manager we
+    // instead read its pixel data back to CPU and re-upload to a
+    // temporary texture created by THIS render manager.
     iTVPRenderManager *mgr = GetRenderManager();
-    iTVPRenderManager *src_mgr = const_cast<iTVPBaseBitmap*>(
-        static_cast<const iTVPBaseBitmap*>(ref))->GetRenderManager();
-    if (mgr != src_mgr) {
-        mgr = TVPGetSoftwareRenderManager();
-    }
+    int StretchTypeId = mgr->EnumParameterID("StretchType");
+    mgr->SetParameterInt(StretchTypeId, (int)type);
     iTVPRenderMethod *_method = mgr->GetRenderMethod(opa, hda, method);
     if(!_method)
         return false;
+
+    // Check if source texture needs conversion to this render manager's
+    // texture type.
+    iTVPRenderManager *src_mgr = const_cast<iTVPBaseBitmap*>(
+        static_cast<const iTVPBaseBitmap*>(ref))->GetRenderManager();
+    iTVPTexture2D *src_tex_raw = ref->GetTexture();
+    iTVPTexture2D *converted_src = nullptr;
+    if (mgr != src_mgr) {
+        // Convert source texture: read pixels from source and create a
+        // temporary texture in this render manager's format.
+        tjs_uint sw = ref->GetWidth();
+        tjs_uint sh = ref->GetHeight();
+        const void *srcpix = src_tex_raw->GetScanLineForRead(0);
+        if (srcpix) {
+            converted_src = mgr->CreateTexture2D(
+                srcpix, src_tex_raw->GetPitch(), sw, sh,
+                TVPTextureFormat::RGBA);
+            src_tex_raw = converted_src;
+        }
+    }
+
     tRenderTexQuadArray::Element src_tex[] = { tRenderTexQuadArray::Element(
-        ref->GetTexture(), refpt) };
+        src_tex_raw, refpt) };
     iTVPTexture2D *reftex = GetTexture();
     mgr->OperateTriangles(
         _method, 2, GetTextureForRender(_method->IsBlendTarget(), &destrect),
         reftex, destrect, dstpt, tRenderTexQuadArray(src_tex));
+
+    if (converted_src) {
+        converted_src->Release();
+    }
     if(updaterect)
         *updaterect = destrect;
     return true;
