@@ -25,6 +25,8 @@ elseif (VCPKG_TARGET_IS_OSX OR VCPKG_TARGET_IS_IOS)
   # iOS and macOS share the "Mac" port — the CMakeLists.txt IOS/is_mac
   # branching handles the platform differences internally.
   set(ANGLE_BUILDSYSTEM_PORT "Mac")
+elseif (VCPKG_TARGET_IS_ANDROID)
+  set(ANGLE_BUILDSYSTEM_PORT "Android")
 elseif (VCPKG_TARGET_IS_LINUX)
   set(ANGLE_BUILDSYSTEM_PORT "Linux")
 else()
