@@ -93,10 +93,25 @@ tjs_int TVPGetSelfUsedMemory() {
 void TVPForceSwapBuffer() {
     // Use the engine's EGL context manager instead of eglGetCurrentDisplay(),
     // which may return EGL_NO_DISPLAY in headless Pbuffer mode.
-    // Only swap when a WindowSurface is attached (Android SurfaceTexture mode).
+    // Only swap when a WindowSurface is attached (Android SurfaceTexture mode)
+    // AND the frame was actually rendered (dirty flag set by UpdateDrawBuffer).
+    //
+    // Without the dirty check, eglSwapBuffers is called every tick even when
+    // no new content was drawn.  In double-buffered mode this causes the
+    // front/back buffers to alternate between the current frame and a stale
+    // frame, producing visible flicker ("previous image overlaid").
     auto& egl = krkr::GetEngineEGLContext();
     if (egl.HasNativeWindow()) {
-        eglSwapBuffers(egl.GetDisplay(), egl.GetWindowSurface());
+        if (!egl.ConsumeFrameDirty()) {
+            // No new content — skip swap to avoid double-buffer flicker.
+            return;
+        }
+        const EGLBoolean ok = eglSwapBuffers(egl.GetDisplay(), egl.GetWindowSurface());
+        if (ok != EGL_TRUE) {
+            __android_log_print(ANDROID_LOG_WARN, "krkr2",
+                                "TVPForceSwapBuffer: eglSwapBuffers failed err=0x%x",
+                                eglGetError());
+        }
     }
     // In Pbuffer mode, swap is a no-op — engine_tick handles readback.
 }
