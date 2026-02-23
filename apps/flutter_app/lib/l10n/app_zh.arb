@@ -1,7 +1,7 @@
 {
   "@@locale": "zh",
 
-  "appTitle": "KrKr2 启动器",
+"appTitle": "KrKr2 Next",
   "settings": "设置",
   "addGame": "添加游戏",
   "refresh": "刷新",
@@ -70,6 +70,10 @@
   "languageEn": "English",
   "languageZh": "简体中文",
   "languageJa": "日本語",
+
+  "themeMode": "主题",
+  "themeDark": "深色",
+  "themeLight": "浅色",
 
   "settingsAbout": "关于",
   "version": "版本",

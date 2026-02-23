@@ -17,18 +17,27 @@ class Krkr2App extends StatefulWidget {
     state?._setLocale(locale);
   }
 
+  /// Change the app theme mode at runtime.
+  static void setThemeMode(BuildContext context, ThemeMode mode) {
+    final state = context.findAncestorStateOfType<_Krkr2AppState>();
+    state?._setThemeMode(mode);
+  }
+
   @override
   State<Krkr2App> createState() => _Krkr2AppState();
 }
 
 class _Krkr2AppState extends State<Krkr2App> {
   static const String _localeKey = 'krkr2_locale';
+  static const String _themeModeKey = 'krkr2_theme_mode';
   Locale? _locale; // null = follow system
+  ThemeMode _themeMode = ThemeMode.dark; // default to dark
 
   @override
   void initState() {
     super.initState();
     _loadLocale();
+    _loadThemeMode();
   }
 
   Future<void> _loadLocale() async {
@@ -39,8 +48,29 @@ class _Krkr2AppState extends State<Krkr2App> {
     }
   }
 
+  Future<void> _loadThemeMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final mode = prefs.getString(_themeModeKey);
+    if (mode != null && mounted) {
+      setState(() {
+        switch (mode) {
+          case 'light':
+            _themeMode = ThemeMode.light;
+          case 'dark':
+            _themeMode = ThemeMode.dark;
+          default:
+            _themeMode = ThemeMode.dark;
+        }
+      });
+    }
+  }
+
   void _setLocale(Locale? locale) {
     setState(() => _locale = locale);
+  }
+
+  void _setThemeMode(ThemeMode mode) {
+    setState(() => _themeMode = mode);
   }
 
   @override
@@ -51,9 +81,10 @@ class _Krkr2AppState extends State<Krkr2App> {
       locale: _locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      themeMode: _themeMode,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.teal,
+          seedColor: Colors.pink,
           brightness: Brightness.light,
         ),
         useMaterial3: true,
@@ -66,7 +97,7 @@ class _Krkr2AppState extends State<Krkr2App> {
       ),
       darkTheme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.teal,
+          seedColor: Colors.pink,
           brightness: Brightness.dark,
         ),
         useMaterial3: true,

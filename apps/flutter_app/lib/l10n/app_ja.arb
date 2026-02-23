@@ -1,7 +1,7 @@
 {
   "@@locale": "ja",
 
-  "appTitle": "KrKr2 ランチャー",
+"appTitle": "KrKr2 Next",
   "settings": "設定",
   "addGame": "ゲームを追加",
   "refresh": "更新",
@@ -70,6 +70,10 @@
   "languageEn": "English",
   "languageZh": "简体中文",
   "languageJa": "日本語",
+
+  "themeMode": "テーマ",
+  "themeDark": "ダーク",
+  "themeLight": "ライト",
 
   "settingsAbout": "バージョン情報",
   "version": "バージョン",

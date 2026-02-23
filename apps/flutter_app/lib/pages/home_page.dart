@@ -365,8 +365,8 @@ class _HomePageState extends State<HomePage> {
                 style: const TextStyle(fontSize: 12),
               ),
               backgroundColor: _effectiveDylibPath != null
-                  ? Colors.green.withValues(alpha: 0.15)
-                  : Colors.orange.withValues(alpha: 0.15),
+                  ? colorScheme.primaryContainer
+                  : colorScheme.errorContainer,
               visualDensity: VisualDensity.compact,
             ),
           ),

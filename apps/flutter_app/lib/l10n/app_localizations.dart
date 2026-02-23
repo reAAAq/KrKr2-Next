@@ -103,7 +103,7 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In en, this message translates to:
-  /// **'KrKr2 Launcher'**
+  /// **'KrKr2 Next'**
   String get appTitle;
 
   /// No description provided for @settings.
@@ -453,6 +453,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'日本語'**
   String get languageJa;
+
+  /// No description provided for @themeMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get themeMode;
+
+  /// No description provided for @themeDark.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get themeDark;
+
+  /// No description provided for @themeLight.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get themeLight;
 
   /// No description provided for @settingsAbout.
   ///

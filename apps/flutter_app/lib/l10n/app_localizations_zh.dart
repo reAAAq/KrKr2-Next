@@ -9,7 +9,7 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
-  String get appTitle => 'KrKr2 启动器';
+  String get appTitle => 'KrKr2 Next';
 
   @override
   String get settings => '设置';
@@ -193,6 +193,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get languageJa => '日本語';
+
+  @override
+  String get themeMode => '主题';
+
+  @override
+  String get themeDark => '深色';
+
+  @override
+  String get themeLight => '浅色';
 
   @override
   String get settingsAbout => '关于';

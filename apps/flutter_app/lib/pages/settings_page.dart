@@ -55,6 +55,7 @@ class _SettingsPageState extends State<SettingsPage> {
   static const String _targetFpsKey = 'krkr2_target_fps';
   static const String _rendererKey = 'krkr2_renderer';
   static const String _localeKey = 'krkr2_locale';
+  static const String _themeModeKey = 'krkr2_theme_mode';
   static const List<int> _fpsOptions = [30, 60, 120];
 
   late EngineMode _engineMode;
@@ -63,6 +64,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late int _targetFps;
   late String _renderer;
   String _localeCode = 'system';
+  String _themeModeCode = 'dark';
   bool _dirty = false;
 
   @override
@@ -74,6 +76,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _targetFps = widget.targetFps;
     _renderer = widget.renderer;
     _loadLocale();
+    _loadThemeMode();
   }
 
   Future<void> _loadLocale() async {
@@ -81,6 +84,15 @@ class _SettingsPageState extends State<SettingsPage> {
     if (mounted) {
       setState(() {
         _localeCode = prefs.getString(_localeKey) ?? 'system';
+      });
+    }
+  }
+
+  Future<void> _loadThemeMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _themeModeCode = prefs.getString(_themeModeKey) ?? 'dark';
       });
     }
   }
@@ -130,6 +142,17 @@ class _SettingsPageState extends State<SettingsPage> {
     } else {
       Krkr2App.setLocale(context, Locale(code));
     }
+  }
+
+  Future<void> _changeThemeMode(String code) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_themeModeKey, code);
+    if (!mounted) return;
+    setState(() => _themeModeCode = code);
+
+    // Apply theme change in real-time
+    final mode = code == 'light' ? ThemeMode.light : ThemeMode.dark;
+    Krkr2App.setThemeMode(context, mode);
   }
 
   @override
@@ -319,6 +342,28 @@ class _SettingsPageState extends State<SettingsPage> {
               child: Column(
                 children: [
                   ListTile(
+                    title: Text(l10n.themeMode),
+                    trailing: SegmentedButton<String>(
+                      segments: [
+                        ButtonSegment<String>(
+                          value: 'dark',
+                          label: Text(l10n.themeDark),
+                          icon: const Icon(Icons.dark_mode, size: 18),
+                        ),
+                        ButtonSegment<String>(
+                          value: 'light',
+                          label: Text(l10n.themeLight),
+                          icon: const Icon(Icons.light_mode, size: 18),
+                        ),
+                      ],
+                      selected: {_themeModeCode},
+                      onSelectionChanged: (Set<String> selected) {
+                        _changeThemeMode(selected.first);
+                      },
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
                     title: Text(l10n.language),
                     trailing: DropdownButton<String>(
                       value: _localeCode,
@@ -360,7 +405,7 @@ class _SettingsPageState extends State<SettingsPage> {
             Card(
               child: ListTile(
                 title: Text(l10n.version),
-                trailing: const Text('1.0.0'),
+                trailing: const Text('dev'),
               ),
             ),
             const SizedBox(height: 32),
@@ -420,20 +465,6 @@ class _SettingsPageState extends State<SettingsPage> {
                         fontSize: 11,
                         color: colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
-                    ),
-                  ),
-                if (widget.builtInAvailable && widget.builtInDylibPath != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      widget.builtInDylibPath!,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontFamily: 'monospace',
-                        color: colorScheme.onSurface.withValues(alpha: 0.5),
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
               ],

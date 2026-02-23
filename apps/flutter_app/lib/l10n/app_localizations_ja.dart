@@ -9,7 +9,7 @@ class AppLocalizationsJa extends AppLocalizations {
   AppLocalizationsJa([String locale = 'ja']) : super(locale);
 
   @override
-  String get appTitle => 'KrKr2 ランチャー';
+  String get appTitle => 'KrKr2 Next';
 
   @override
   String get settings => '設定';
@@ -195,6 +195,15 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get languageJa => '日本語';
+
+  @override
+  String get themeMode => 'テーマ';
+
+  @override
+  String get themeDark => 'ダーク';
+
+  @override
+  String get themeLight => 'ライト';
 
   @override
   String get settingsAbout => 'バージョン情報';
