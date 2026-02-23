@@ -533,6 +533,7 @@ int TVPShowSimpleMessageBox(const char *pszText, const char *pszTitle,
            methodInfo, "org/tvp/kirikiri2/KR2Activity", "ShowMessageBox",
            "(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/"
            "String;)V")) {
+        MsgBoxRet = -2;
         jstring jstrTitle = methodInfo.env->NewStringUTF(pszTitle);
         jstring jstrText = methodInfo.env->NewStringUTF(pszText);
         jclass strcls = methodInfo.env->FindClass("java/lang/String");
@@ -563,6 +564,25 @@ int TVPShowSimpleMessageBox(const char *pszText, const char *pszTitle,
     }
     return -1;
 }
+
+#ifdef __ANDROID__
+extern "C" JNIEXPORT void JNICALL
+Java_org_tvp_kirikiri2_KR2Activity_nativeOnMessageBoxResult(
+    JNIEnv* /* env */, jclass /* clazz */, jint result) {
+    std::lock_guard<std::mutex> lk(MessageBoxLock);
+    MsgBoxRet = static_cast<int>(result);
+    MessageBoxCond.notify_all();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_tvp_kirikiri2_KR2Activity_nativeOnInputBoxResult(
+    JNIEnv* /* env */, jclass /* clazz */, jint result, jstring text) {
+    std::lock_guard<std::mutex> lk(MessageBoxLock);
+    MsgBoxRet = static_cast<int>(result);
+    MessageBoxRetText = JniHelper::jstring2string(text);
+    MessageBoxCond.notify_all();
+}
+#endif
 
 int TVPShowSimpleMessageBox(const ttstr &text, const ttstr &caption,
                             const std::vector<ttstr> &vecButtons) {

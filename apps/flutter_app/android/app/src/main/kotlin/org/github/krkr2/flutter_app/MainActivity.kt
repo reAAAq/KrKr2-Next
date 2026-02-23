@@ -1,5 +1,5 @@
 package org.github.krkr2.flutter_app
 
-import io.flutter.embedding.android.FlutterActivity
+import org.tvp.kirikiri2.KR2Activity
 
-class MainActivity : FlutterActivity()
+class MainActivity : KR2Activity()

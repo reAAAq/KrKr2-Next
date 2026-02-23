@@ -8,14 +8,137 @@
 #include "KrkrJniHelper.h"
 #include <android/log.h>
 #include <mutex>
+#include <string>
 
 #define LOG_TAG "krkr2"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+
+// Declared in platforms/android/cpp/krkr2_android.cpp
+extern jobject krkr_GetApplicationContext();
 
 namespace krkr {
 
 static JavaVM* g_javaVM = nullptr;
 static std::mutex g_jvm_mutex;
+
+namespace {
+
+// Try to get an application context even before Flutter plugin JNI has run.
+jobject ResolveApplicationContext(JNIEnv* env) {
+    if (!env) return nullptr;
+    jobject appContextGlobal = krkr_GetApplicationContext();
+    if (!appContextGlobal) {
+        jclass activityThreadClass = env->FindClass("android/app/ActivityThread");
+        if (!activityThreadClass) {
+            env->ExceptionClear();
+            return nullptr;
+        }
+        jmethodID currentApplication = env->GetStaticMethodID(
+            activityThreadClass, "currentApplication", "()Landroid/app/Application;");
+        if (!currentApplication) {
+            env->ExceptionClear();
+            env->DeleteLocalRef(activityThreadClass);
+            return nullptr;
+        }
+        jobject app = env->CallStaticObjectMethod(activityThreadClass, currentApplication);
+        env->DeleteLocalRef(activityThreadClass);
+        if (env->ExceptionCheck() || !app) {
+            env->ExceptionClear();
+            return nullptr;
+        }
+        return app;
+    }
+
+    return env->NewLocalRef(appContextGlobal);
+}
+
+jclass FindClassWithAppClassLoader(JNIEnv* env, const char* className) {
+    if (!env || !className) return nullptr;
+
+    jobject appContext = ResolveApplicationContext(env);
+    if (!appContext) {
+        return nullptr;
+    }
+
+    jclass contextClass = env->FindClass("android/content/Context");
+    if (!contextClass) {
+        env->ExceptionClear();
+        env->DeleteLocalRef(appContext);
+        return nullptr;
+    }
+
+    jmethodID getClassLoader = env->GetMethodID(
+        contextClass, "getClassLoader", "()Ljava/lang/ClassLoader;");
+    if (!getClassLoader) {
+        env->ExceptionClear();
+        env->DeleteLocalRef(contextClass);
+        env->DeleteLocalRef(appContext);
+        return nullptr;
+    }
+
+    jobject classLoader =
+        env->CallObjectMethod(appContext, getClassLoader);
+    if (env->ExceptionCheck() || !classLoader) {
+        env->ExceptionClear();
+        env->DeleteLocalRef(contextClass);
+        env->DeleteLocalRef(appContext);
+        return nullptr;
+    }
+
+    jclass classLoaderClass = env->FindClass("java/lang/ClassLoader");
+    if (!classLoaderClass) {
+        env->ExceptionClear();
+        env->DeleteLocalRef(classLoader);
+        env->DeleteLocalRef(contextClass);
+        env->DeleteLocalRef(appContext);
+        return nullptr;
+    }
+
+    jmethodID loadClass = env->GetMethodID(
+        classLoaderClass, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;");
+    if (!loadClass) {
+        env->ExceptionClear();
+        env->DeleteLocalRef(classLoaderClass);
+        env->DeleteLocalRef(classLoader);
+        env->DeleteLocalRef(contextClass);
+        env->DeleteLocalRef(appContext);
+        return nullptr;
+    }
+
+    std::string dottedName(className);
+    for (char& c : dottedName) {
+        if (c == '/') c = '.';
+    }
+    jstring classNameJava = env->NewStringUTF(dottedName.c_str());
+    jobject classObject = env->CallObjectMethod(classLoader, loadClass, classNameJava);
+
+    env->DeleteLocalRef(classNameJava);
+    env->DeleteLocalRef(classLoaderClass);
+    env->DeleteLocalRef(classLoader);
+    env->DeleteLocalRef(contextClass);
+    env->DeleteLocalRef(appContext);
+
+    if (env->ExceptionCheck() || !classObject) {
+        env->ExceptionClear();
+        return nullptr;
+    }
+
+    return reinterpret_cast<jclass>(classObject);
+}
+
+jclass FindClass(JNIEnv* env, const char* className) {
+    if (!env || !className) return nullptr;
+
+    jclass classID = env->FindClass(className);
+    if (classID) {
+        return classID;
+    }
+
+    env->ExceptionClear();
+    return FindClassWithAppClassLoader(env, className);
+}
+
+} // namespace
 
 void JniHelper::setJavaVM(JavaVM* vm) {
     std::lock_guard<std::mutex> lock(g_jvm_mutex);
@@ -69,10 +192,9 @@ bool JniHelper::getStaticMethodInfo(MethodInfo& info,
     JNIEnv* env = getEnv();
     if (!env) return false;
 
-    jclass classID = env->FindClass(className);
+    jclass classID = FindClass(env, className);
     if (!classID) {
         LOGE("JniHelper: class '%s' not found", className);
-        env->ExceptionClear();
         return false;
     }
 
@@ -98,10 +220,9 @@ bool JniHelper::getMethodInfo(MethodInfo& info,
     JNIEnv* env = getEnv();
     if (!env) return false;
 
-    jclass classID = env->FindClass(className);
+    jclass classID = FindClass(env, className);
     if (!classID) {
         LOGE("JniHelper: class '%s' not found", className);
-        env->ExceptionClear();
         return false;
     }
 
