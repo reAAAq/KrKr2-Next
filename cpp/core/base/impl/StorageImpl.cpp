@@ -332,6 +332,28 @@ void tTVPFileMedia::GetLocallyAccessibleName(ttstr &name) {
     //     pp++;
     // }
 #else // posix
+#if defined(__ANDROID__)
+    // Android sandbox frequently denies directory probing from "/" and we
+    // don't need case-insensitive recovery there. Fast-path absolute storage
+    // names to a direct POSIX path.
+    if(!TJS_strncmp(ptr, TJS_W("./"), 2)) {
+        ptr += 2; // skip "./"
+        if(*ptr) {
+            if(*ptr == TJS_W('/')) {
+                name = ttstr(ptr);
+            } else {
+                name = ttstr(TJS_W("/")) + ttstr(ptr);
+            }
+        } else {
+            name = TJS_W("/");
+        }
+        return;
+    }
+    if(*ptr == TJS_W('/')) {
+        name = ttstr(ptr);
+        return;
+    }
+#endif
     if(!TJS_strncmp(ptr, TJS_W("./"), 2)) {
         ptr += 2; // skip "./"
         newname.Clear();
