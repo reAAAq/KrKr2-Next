@@ -204,6 +204,32 @@ class FlutterEngineBridgeAdapter implements EngineBridge {
   }
 
   @override
+  Future<Map<String, dynamic>?> createSurfaceTexture({
+    required int width,
+    required int height,
+  }) {
+    return _delegate.createSurfaceTexture(width: width, height: height);
+  }
+
+  @override
+  Future<Map<String, dynamic>?> resizeSurfaceTexture({
+    required int textureId,
+    required int width,
+    required int height,
+  }) {
+    return _delegate.resizeSurfaceTexture(
+      textureId: textureId,
+      width: width,
+      height: height,
+    );
+  }
+
+  @override
+  Future<void> disposeSurfaceTexture({required int textureId}) {
+    return _delegate.disposeSurfaceTexture(textureId: textureId);
+  }
+
+  @override
   String engineGetRendererInfo() => _delegate.engineGetRendererInfo();
 
   @override

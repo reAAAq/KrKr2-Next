@@ -100,6 +100,18 @@ abstract interface class EngineBridge {
   });
   Future<void> disposeIOSurfaceTexture({required int textureId});
 
+  // SurfaceTexture zero-copy rendering (Android)
+  Future<Map<String, dynamic>?> createSurfaceTexture({
+    required int width,
+    required int height,
+  });
+  Future<Map<String, dynamic>?> resizeSurfaceTexture({
+    required int textureId,
+    required int width,
+    required int height,
+  });
+  Future<void> disposeSurfaceTexture({required int textureId});
+
   String engineGetRendererInfo();
   String engineGetLastError();
 }

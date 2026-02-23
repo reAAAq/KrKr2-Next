@@ -49,6 +49,11 @@ class _HomePageState extends State<HomePage> {
     if (Platform.isIOS) {
       return '__static_linked__';
     }
+    if (Platform.isAndroid) {
+      // On Android, native libs are bundled in the APK and loaded
+      // automatically via DynamicLibrary.open('libengine_api.so').
+      return '__bundled_in_apk__';
+    }
     try {
       final executablePath = Platform.resolvedExecutable;
       final execDir = File(executablePath).parent.path;
@@ -61,7 +66,9 @@ class _HomePageState extends State<HomePage> {
 
   String? get _effectiveDylibPath {
     if (_engineMode == EngineMode.builtIn) {
-      if (Platform.isIOS) return null;
+      // On iOS and Android, the engine is loaded automatically by the system;
+      // no explicit dylib path is needed.
+      if (Platform.isIOS || Platform.isAndroid) return null;
       return _builtInDylibPath;
     }
     return _customDylibPath;
@@ -353,9 +360,9 @@ class _HomePageState extends State<HomePage> {
   void _launchGame(GameInfo game) {
     final l10n = AppLocalizations.of(context)!;
     final dylibPath = _effectiveDylibPath;
-    final isStaticLinkedBuiltIn =
-        Platform.isIOS && _engineMode == EngineMode.builtIn;
-    if (dylibPath == null && !isStaticLinkedBuiltIn) {
+    final isSystemLoadedBuiltIn =
+        (Platform.isIOS || Platform.isAndroid) && _engineMode == EngineMode.builtIn;
+    if (dylibPath == null && !isSystemLoadedBuiltIn) {
       final msg = _engineMode == EngineMode.builtIn
           ? l10n.engineNotFoundBuiltIn
           : l10n.engineNotFoundCustom;

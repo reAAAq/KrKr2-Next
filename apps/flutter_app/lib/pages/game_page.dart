@@ -414,7 +414,7 @@ class _GamePageState extends State<GamePage>
                         key: _surfaceKey,
                         bridge: _bridge,
                         active: surfaceActive,
-                        surfaceMode: EngineSurfaceMode.iosurface,
+                        surfaceMode: EngineSurfaceMode.gpuZeroCopy,
                         externalTickDriven: _isTicking,
                         onLog: (msg) => _log('surface: $msg'),
                         onError: (msg) => _log('surface error: $msg'),

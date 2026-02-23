@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
@@ -21,8 +22,8 @@ class EngineInputEventType {
 
 /// Rendering mode for the engine surface.
 enum EngineSurfaceMode {
-  /// IOSurface zero-copy mode (macOS only, highest performance).
-  iosurface,
+  /// GPU zero-copy mode (macOS: IOSurface, Android: SurfaceTexture).
+  gpuZeroCopy,
   /// Flutter Texture with RGBA pixel upload (cross-platform, slower).
   texture,
   /// Pure software decoding via RawImage (slowest, always works).
@@ -34,7 +35,7 @@ class EngineSurface extends StatefulWidget {
     super.key,
     required this.bridge,
     required this.active,
-    this.surfaceMode = EngineSurfaceMode.iosurface,
+    this.surfaceMode = EngineSurfaceMode.gpuZeroCopy,
     this.externalTickDriven = false,
     this.onLog,
     this.onError,
@@ -71,11 +72,15 @@ class EngineSurfaceState extends State<EngineSurface> {
   // Legacy texture mode
   int? _textureId;
 
-  // IOSurface zero-copy mode
+  // IOSurface zero-copy mode (macOS)
   int? _ioSurfaceTextureId;
   // ignore: unused_field
   int? _ioSurfaceId;
   bool _ioSurfaceInitInFlight = false;
+
+  // SurfaceTexture zero-copy mode (Android)
+  int? _surfaceTextureId;
+  bool _surfaceTextureInitInFlight = false;
 
   @override
   void initState() {
@@ -113,6 +118,7 @@ class EngineSurfaceState extends State<EngineSurface> {
   Future<void> _disposeAllTextures() async {
     await _disposeTexture();
     await _disposeIOSurfaceTexture();
+    await _disposeSurfaceTexture();
   }
 
   void _reconcilePolling() {
@@ -187,8 +193,12 @@ class EngineSurfaceState extends State<EngineSurface> {
 
   Future<void> _ensureRenderTarget() async {
     switch (widget.surfaceMode) {
-      case EngineSurfaceMode.iosurface:
-        await _ensureIOSurfaceTexture();
+      case EngineSurfaceMode.gpuZeroCopy:
+        if (Platform.isAndroid) {
+          await _ensureSurfaceTexture();
+        } else {
+          await _ensureIOSurfaceTexture();
+        }
         break;
       case EngineSurfaceMode.texture:
         await _ensureTexture();
@@ -323,6 +333,90 @@ class EngineSurfaceState extends State<EngineSurface> {
     await widget.bridge.disposeIOSurfaceTexture(textureId: textureId);
   }
 
+  // --- SurfaceTexture zero-copy mode (Android) ---
+
+  Future<void> _ensureSurfaceTexture() async {
+    if (!widget.active ||
+        _surfaceTextureInitInFlight ||
+        _surfaceWidth <= 0 ||
+        _surfaceHeight <= 0) {
+      return;
+    }
+
+    // Check if we need to resize
+    if (_surfaceTextureId != null) {
+      if (_frameWidth == _surfaceWidth && _frameHeight == _surfaceHeight) {
+        return; // Already at correct size
+      }
+      // Resize needed
+      _surfaceTextureInitInFlight = true;
+      try {
+        final result = await widget.bridge.resizeSurfaceTexture(
+          textureId: _surfaceTextureId!,
+          width: _surfaceWidth,
+          height: _surfaceHeight,
+        );
+        if (result != null && mounted) {
+          _frameWidth = _surfaceWidth;
+          _frameHeight = _surfaceHeight;
+          widget.onLog?.call(
+            'SurfaceTexture resized: ${_surfaceWidth}x$_surfaceHeight',
+          );
+        }
+      } finally {
+        _surfaceTextureInitInFlight = false;
+      }
+      return;
+    }
+
+    _surfaceTextureInitInFlight = true;
+    try {
+      final result = await widget.bridge.createSurfaceTexture(
+        width: _surfaceWidth,
+        height: _surfaceHeight,
+      );
+
+      if (!mounted) return;
+      if (result == null) {
+        widget.onLog?.call(
+          'SurfaceTexture unavailable, falling back to legacy texture mode',
+        );
+        await _ensureTexture();
+        return;
+      }
+
+      final int textureId = result['textureId'] as int;
+
+      // The SurfaceTexture/Surface is already passed to C++ via JNI
+      // in the Kotlin plugin's createSurfaceTexture method.
+      // The C++ engine_api will attach the ANativeWindow as the
+      // render target via engine_set_render_target_surface (called
+      // from the JNI bridge in krkr2_android.cpp).
+
+      final ui.Image? previousImage = _frameImage;
+      setState(() {
+        _surfaceTextureId = textureId;
+        _textureId = null; // Dispose legacy texture if any
+        _frameImage = null;
+        _frameWidth = _surfaceWidth;
+        _frameHeight = _surfaceHeight;
+      });
+      previousImage?.dispose();
+      widget.onLog?.call(
+        'SurfaceTexture zero-copy mode enabled (textureId=$textureId)',
+      );
+    } finally {
+      _surfaceTextureInitInFlight = false;
+    }
+  }
+
+  Future<void> _disposeSurfaceTexture() async {
+    final int? textureId = _surfaceTextureId;
+    if (textureId == null) return;
+    _surfaceTextureId = null;
+    await widget.bridge.disposeSurfaceTexture(textureId: textureId);
+  }
+
   // --- Legacy texture mode ---
 
   Future<void> _ensureTexture() async {
@@ -380,8 +474,8 @@ class EngineSurfaceState extends State<EngineSurface> {
 
     _frameInFlight = true;
     try {
-      // IOSurface zero-copy mode: just notify Flutter, no pixel transfer
-      if (_ioSurfaceTextureId != null) {
+      // IOSurface/SurfaceTexture zero-copy mode: just notify Flutter, no pixel transfer
+      if (_ioSurfaceTextureId != null || _surfaceTextureId != null) {
         // When the caller already checked the flag (external tick-driven
         // mode), use that value directly to avoid the double-read problem.
         // engineGetFrameRenderedFlag resets the flag on read, so a second
@@ -389,8 +483,9 @@ class EngineSurfaceState extends State<EngineSurface> {
         final bool rendered = externalRendered ??
             await widget.bridge.engineGetFrameRenderedFlag();
         if (rendered && mounted) {
+          final int activeZeroCopyTextureId = _ioSurfaceTextureId ?? _surfaceTextureId!;
           await widget.bridge.notifyFrameAvailable(
-            textureId: _ioSurfaceTextureId!,
+            textureId: activeZeroCopyTextureId,
           );
           setState(() {
             _lastFrameSerial += 1;
@@ -619,7 +714,7 @@ class EngineSurfaceState extends State<EngineSurface> {
 
   @override
   Widget build(BuildContext context) {
-    final int? activeTextureId = _ioSurfaceTextureId ?? _textureId;
+    final int? activeTextureId = _ioSurfaceTextureId ?? _surfaceTextureId ?? _textureId;
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
