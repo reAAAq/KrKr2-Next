@@ -295,8 +295,12 @@ void TVPReleaseFontLibrary();
 void TVPExitApplication(int code) {
     // clear some static data for memory leak detect
     TVPDeliverCompactEvent(TVP_COMPACT_LEVEL_MAX);
-    if(!TVPIsSoftwareRenderManager())
-        iTVPTexture2D::RecycleProcess();
+    try {
+        if(!TVPIsSoftwareRenderManager())
+            iTVPTexture2D::RecycleProcess();
+    } catch(...) {
+        // Ignore – we are shutting down anyway.
+    }
 
     // 	if (TVPScriptEngine) TVPScriptEngine->Cleanup();
     // 	TVPReleaseFontLibrary();
