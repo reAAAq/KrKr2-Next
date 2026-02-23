@@ -33,13 +33,19 @@ if (VCPKG_TARGET_ANDROID)
     endif()
 
     #
-    # 2. Check the presence of environment variable VCPKG_ROOT
+    # 2. Check the presence of VCPKG_ROOT (accept both -D variable and env variable)
     #
+    if (DEFINED VCPKG_ROOT AND NOT DEFINED ENV{VCPKG_ROOT})
+        # Propagate CMake -D variable to environment so toolchain file can find it
+        set(ENV{VCPKG_ROOT} "${VCPKG_ROOT}")
+        message("vcpkg_android.cmake: VCPKG_ROOT set from CMake variable: ${VCPKG_ROOT}")
+    endif()
     if (NOT DEFINED ENV{VCPKG_ROOT})
         message(FATAL_ERROR "
         Please set an environment variable VCPKG_ROOT
         For example:
         export VCPKG_ROOT=/path/to/vcpkg
+        Or pass -DVCPKG_ROOT=/path/to/vcpkg to cmake
         ")
     endif()
 

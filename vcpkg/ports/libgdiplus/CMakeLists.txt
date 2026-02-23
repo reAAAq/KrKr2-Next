@@ -150,7 +150,7 @@ target_sources(${PROJECT_NAME}
         src/adjustablearrowcap.c
         src/bitmap.c
         src/brush.c
-        $<$<NOT:$<PLATFORM_ID:iOS>>:src/carbon-private.c>
+        $<$<PLATFORM_ID:Darwin>:src/carbon-private.c>
         src/customlinecap.c
         src/dstream.c
         src/font.c
