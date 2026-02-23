@@ -49,18 +49,21 @@ if(ANDROID)
     target_link_libraries(${PROJECT_NAME} INTERFACE
         log
         android
-        EGL
-        GLESv2
-        GLESv1_CM
         OpenSLES
     )
 endif()
 
 # ANGLE — KRKR_USE_ANGLE compile definition propagated to all modules
-if(NOT ANDROID)
-    find_package(unofficial-angle CONFIG QUIET)
-    if(unofficial-angle_FOUND)
-        target_compile_definitions(${PROJECT_NAME} INTERFACE KRKR_USE_ANGLE=1)
-        message(STATUS "ANGLE found — KRKR_USE_ANGLE=1 propagated to all modules")
+# All platforms (including Android) use ANGLE for EGL + GLES2.
+# On Android, ANGLE provides a Vulkan backend for consistent rendering.
+find_package(unofficial-angle CONFIG QUIET)
+if(unofficial-angle_FOUND)
+    target_compile_definitions(${PROJECT_NAME} INTERFACE KRKR_USE_ANGLE=1)
+    message(STATUS "ANGLE found — KRKR_USE_ANGLE=1 propagated to all modules")
+else()
+    if(ANDROID)
+        # Fallback: use system EGL/GLES2 if ANGLE is not available
+        target_link_libraries(${PROJECT_NAME} INTERFACE EGL GLESv2)
+        message(STATUS "ANGLE not found — Android fallback to system EGL/GLES2")
     endif()
 endif()

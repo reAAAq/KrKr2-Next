@@ -34,7 +34,7 @@ typedef voidp unzFile;
 
 #undef ZEXPORT
 #define ZEXPORT
-typedef uint64_t ZPOS64_T;
+// ZPOS64_T is already defined in minizip/ioapi.h (included above)
 
 typedef struct tm_unz_s {
     uInt tm_sec; /* seconds after the minute - [0,59] */

@@ -43,7 +43,17 @@ find_package(Opus CONFIG REQUIRED)
 find_package(OpusFile CONFIG REQUIRED)
 
 if(ANDROID)
-    find_package(oboe CONFIG REQUIRED)
+    # vcpkg's oboe port does not ship CMake config files; find manually.
+    find_library(OBOE_LIBRARY NAMES oboe PATHS "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
+    find_path(OBOE_INCLUDE_DIR NAMES oboe/Oboe.h PATHS "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include" NO_DEFAULT_PATH)
+    if(NOT OBOE_LIBRARY OR NOT OBOE_INCLUDE_DIR)
+        message(FATAL_ERROR "Could not find oboe library. OBOE_LIBRARY=${OBOE_LIBRARY} OBOE_INCLUDE_DIR=${OBOE_INCLUDE_DIR}")
+    endif()
+    add_library(oboe::oboe STATIC IMPORTED)
+    set_target_properties(oboe::oboe PROPERTIES
+        IMPORTED_LOCATION "${OBOE_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${OBOE_INCLUDE_DIR}"
+    )
 
     target_link_libraries(${PROJECT_NAME} PRIVATE
         oboe::oboe

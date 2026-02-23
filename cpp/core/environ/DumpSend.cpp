@@ -39,13 +39,13 @@ struct zlib_inmem_func64 : public zlib_filefunc64_def {
         return str->Write(buf, size);
     }
 
-    static uint64_t ZCALLBACK ftell64_file_func(voidpf opaque, voidpf stream) {
+    static ZPOS64_T ZCALLBACK ftell64_file_func(voidpf opaque, voidpf stream) {
         tTVPMemoryStream *str = (tTVPMemoryStream *)stream;
         return str->GetPosition();
     }
 
     static long ZCALLBACK fseek64_file_func(voidpf opaque, voidpf stream,
-                                            uint64_t offset, int origin) {
+                                            ZPOS64_T offset, int origin) {
         int fseek_origin = TJS_BS_SEEK_SET;
         switch(origin) {
             case ZLIB_FILEFUNC_SEEK_CUR:

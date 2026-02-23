@@ -86,16 +86,21 @@ target_link_libraries(${PROJECT_NAME} PRIVATE libbpg)
 find_package(WebP CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} INTERFACE WebP::webp WebP::webpdecoder WebP::webpdemux)
 
-# ANGLE (EGL + GLES2) — provides GL context and rendering
-if(NOT ANDROID)
-    find_package(unofficial-angle CONFIG QUIET)
-    if(unofficial-angle_FOUND)
-        target_link_libraries(${PROJECT_NAME} PRIVATE
-            unofficial::angle::libEGL
-            unofficial::angle::libGLESv2
-        )
-        target_compile_definitions(${PROJECT_NAME} PRIVATE KRKR_USE_ANGLE=1)
-        message(STATUS "ANGLE found — EGL + GLES2 libraries linked")
+# ANGLE (EGL + GLES2) — provides GL context and rendering.
+# All platforms (including Android) use ANGLE for consistent EGL/GLES2.
+find_package(unofficial-angle CONFIG QUIET)
+if(unofficial-angle_FOUND)
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+        unofficial::angle::libEGL
+        unofficial::angle::libGLESv2
+    )
+    target_compile_definitions(${PROJECT_NAME} PRIVATE KRKR_USE_ANGLE=1)
+    message(STATUS "ANGLE found — EGL + GLES2 libraries linked")
+else()
+    if(ANDROID)
+        # Fallback: link system EGL/GLES2 on Android if ANGLE is not available
+        target_link_libraries(${PROJECT_NAME} PRIVATE EGL GLESv2)
+        message(STATUS "ANGLE not found — Android fallback to system EGL/GLES2")
     else()
         message(WARNING "ANGLE not found — GL rendering may not work")
     endif()
