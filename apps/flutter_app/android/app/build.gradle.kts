@@ -28,6 +28,42 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        ndk {
+            // Supported ABIs for ANGLE + vcpkg
+            abiFilters += listOf("arm64-v8a")
+        }
+
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-std=c++17"
+                // Only build for arm64-v8a to avoid unnecessary compilation
+                abiFilters += listOf("arm64-v8a")
+                // Project root is ../../../../ relative to this build.gradle.kts
+                val projectRoot = file("../../../../").absolutePath
+                val vcpkgRoot = "${projectRoot}/.devtools/vcpkg"
+                val ndkDir = android.ndkDirectory.absolutePath
+                arguments += listOf(
+                    "-DANDROID_STL=c++_shared",
+                    "-DVCPKG_TARGET_ANDROID=ON",
+                    "-DBUILD_ENGINE_API=ON",
+                    "-DENABLE_TESTS=OFF",
+                    "-DBUILD_TOOLS=OFF",
+                    "-DVCPKG_ROOT=${vcpkgRoot}",
+                    // Use vcpkg toolchain as primary, chainload Android NDK toolchain
+                    "-DCMAKE_TOOLCHAIN_FILE=${vcpkgRoot}/scripts/buildsystems/vcpkg.cmake",
+                    "-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=${ndkDir}/build/cmake/android.toolchain.cmake"
+                )
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            // Point to the project root CMakeLists.txt which builds both krkr2.so and engine_api.so
+            path = file("../../../../CMakeLists.txt")
+            version = "3.28.0+"
+        }
     }
 
     buildTypes {
