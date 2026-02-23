@@ -66,12 +66,6 @@ public:
     bool Resize(uint32_t width, uint32_t height);
 
     /**
-     * Swap buffers (no-op for Pbuffer, but kept for interface
-     * compatibility if we later switch to window surfaces).
-     */
-    void SwapBuffers();
-
-    /**
      * Attach an IOSurface as the render target FBO.
      * When attached, all rendering goes to the IOSurface instead
      * of the Pbuffer. The FBO is bound as GL_FRAMEBUFFER.
@@ -110,6 +104,21 @@ public:
     uint32_t GetIOSurfaceHeight() const { return iosurface_height_; }
 
     /**
+     * Initialize EGL directly with an ANativeWindow (Android only).
+     * Unlike Initialize() which creates a Pbuffer, this creates
+     * a WindowSurface directly, avoiding Pbuffer-related failures
+     * on some Android devices/drivers.
+     *
+     * After this call, IsValid()==true and HasNativeWindow()==true.
+     *
+     * @param window  ANativeWindow* from ANativeWindow_fromSurface()
+     * @param width   Surface width in pixels
+     * @param height  Surface height in pixels
+     * @return true on success
+     */
+    bool InitializeWithWindow(void* window, uint32_t width, uint32_t height);
+
+    /**
      * Attach an Android ANativeWindow as the render target.
      * Creates an EGL WindowSurface and binds it as the primary surface.
      * eglSwapBuffers() delivers frames directly to the SurfaceTexture.
@@ -145,6 +154,22 @@ public:
      * @return the ANativeWindow height (0 if not attached).
      */
     uint32_t GetNativeWindowHeight() const { return window_height_; }
+
+    /**
+     * Mark the current frame as dirty (new content rendered).
+     * Must be called after UpdateDrawBuffer() completes rendering.
+     */
+    void MarkFrameDirty() { frame_dirty_ = true; }
+
+    /**
+     * Check and consume the dirty flag.
+     * @return true if the frame was dirty (and flag is now cleared).
+     */
+    bool ConsumeFrameDirty() {
+        if (!frame_dirty_) return false;
+        frame_dirty_ = false;
+        return true;
+    }
 
     // Accessors
     uint32_t GetWidth()   const { return width_; }
@@ -183,6 +208,11 @@ private:
     EGLSurface window_surface_      = EGL_NO_SURFACE;
     uint32_t   window_width_        = 0;
     uint32_t   window_height_       = 0;
+
+    // Frame dirty flag — prevents eglSwapBuffers on frames where
+    // UpdateDrawBuffer() was not called, avoiding double-buffer
+    // flicker (alternating between current and stale back-buffer).
+    bool       frame_dirty_         = false;
 };
 
 /**

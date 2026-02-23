@@ -23,8 +23,15 @@
 
 #if defined(__ANDROID__)
 #include <EGL/eglext.h>
+#include <EGL/eglext_angle.h>
+#include <android/log.h>
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
+#define EGL_LOGI(...) __android_log_print(ANDROID_LOG_INFO, "krkr2-egl", __VA_ARGS__)
+#define EGL_LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "krkr2-egl", __VA_ARGS__)
+#else
+#define EGL_LOGI(...) ((void)0)
+#define EGL_LOGE(...) ((void)0)
 #endif // __ANDROID__
 
 namespace krkr {
@@ -43,19 +50,46 @@ bool EGLContextManager::Initialize(uint32_t width, uint32_t height) {
         Destroy();
     }
 
-    // Get the default ANGLE display
-    display_ = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    // Get the ANGLE display
+    // On Android, use eglGetPlatformDisplayEXT to get ANGLE's own EGL display
+    // instead of the system EGL display, avoiding conflicts with Flutter Impeller.
+#if defined(__ANDROID__)
+    EGL_LOGI("Initialize: trying eglGetPlatformDisplayEXT(EGL_PLATFORM_ANGLE_ANGLE)");
+    auto eglGetPlatformDisplayEXT_ =
+        reinterpret_cast<PFNEGLGETPLATFORMDISPLAYEXTPROC>(
+            eglGetProcAddress("eglGetPlatformDisplayEXT"));
+    if (eglGetPlatformDisplayEXT_) {
+        const EGLint displayAttribs[] = {
+            EGL_PLATFORM_ANGLE_TYPE_ANGLE,
+            EGL_PLATFORM_ANGLE_TYPE_OPENGLES_ANGLE,
+            EGL_NONE
+        };
+        display_ = eglGetPlatformDisplayEXT_(
+            EGL_PLATFORM_ANGLE_ANGLE, EGL_DEFAULT_DISPLAY, displayAttribs);
+        EGL_LOGI("Initialize: eglGetPlatformDisplayEXT returned %p", display_);
+    }
     if (display_ == EGL_NO_DISPLAY) {
+        EGL_LOGI("Initialize: fallback to eglGetDisplay(EGL_DEFAULT_DISPLAY)");
+        display_ = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    }
+#else
+    EGL_LOGI("Initialize: eglGetDisplay(EGL_DEFAULT_DISPLAY)");
+    display_ = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+#endif
+    if (display_ == EGL_NO_DISPLAY) {
+        EGL_LOGE("eglGetDisplay failed: 0x%x", eglGetError());
         spdlog::error("eglGetDisplay failed: 0x{:x}", eglGetError());
         return false;
     }
 
     EGLint majorVersion, minorVersion;
     if (!eglInitialize(display_, &majorVersion, &minorVersion)) {
+        EGL_LOGE("eglInitialize failed: 0x%x", eglGetError());
         spdlog::error("eglInitialize failed: 0x{:x}", eglGetError());
         display_ = EGL_NO_DISPLAY;
         return false;
     }
+    EGL_LOGI("EGL initialized: version %d.%d", majorVersion, minorVersion);
     spdlog::info("EGL initialized: version {}.{}", majorVersion, minorVersion);
     spdlog::info("EGL vendor: {}", eglQueryString(display_, EGL_VENDOR));
     spdlog::info("EGL version string: {}", eglQueryString(display_, EGL_VERSION));
@@ -81,18 +115,22 @@ bool EGLContextManager::Initialize(uint32_t width, uint32_t height) {
     EGLint numConfigs = 0;
     if (!eglChooseConfig(display_, configAttribs, &config_, 1, &numConfigs) ||
         numConfigs == 0) {
+        EGL_LOGE("eglChooseConfig failed: 0x%x, numConfigs=%d", eglGetError(), numConfigs);
         spdlog::error("eglChooseConfig failed: 0x{:x}, numConfigs={}", eglGetError(), numConfigs);
         eglTerminate(display_);
         display_ = EGL_NO_DISPLAY;
         return false;
     }
+    EGL_LOGI("eglChooseConfig OK: numConfigs=%d", numConfigs);
 
     // Create the Pbuffer surface
     if (!CreateSurface(width, height)) {
+        EGL_LOGE("CreateSurface(Pbuffer) failed for %ux%u", width, height);
         eglTerminate(display_);
         display_ = EGL_NO_DISPLAY;
         return false;
     }
+    EGL_LOGI("Pbuffer surface created: %ux%u", width, height);
 
     // Create GLES2 context
     EGLint contextAttribs[] = {
@@ -101,19 +139,23 @@ bool EGLContextManager::Initialize(uint32_t width, uint32_t height) {
     };
     context_ = eglCreateContext(display_, config_, EGL_NO_CONTEXT, contextAttribs);
     if (context_ == EGL_NO_CONTEXT) {
+        EGL_LOGE("eglCreateContext failed: 0x%x", eglGetError());
         spdlog::error("eglCreateContext failed: 0x{:x}", eglGetError());
         DestroySurface();
         eglTerminate(display_);
         display_ = EGL_NO_DISPLAY;
         return false;
     }
+    EGL_LOGI("eglCreateContext OK");
 
     // Make current
     if (!MakeCurrent()) {
+        EGL_LOGE("Initial MakeCurrent failed");
         spdlog::error("Initial MakeCurrent failed");
         Destroy();
         return false;
     }
+    EGL_LOGI("MakeCurrent OK");
 
     spdlog::info("ANGLE EGL context created successfully: {}x{}", width, height);
     spdlog::default_logger()->flush();
@@ -160,11 +202,15 @@ void EGLContextManager::Destroy() {
 }
 
 bool EGLContextManager::MakeCurrent() {
-    if (display_ == EGL_NO_DISPLAY || surface_ == EGL_NO_SURFACE ||
-        context_ == EGL_NO_CONTEXT) {
+    if (display_ == EGL_NO_DISPLAY || context_ == EGL_NO_CONTEXT) {
         return false;
     }
-    if (!eglMakeCurrent(display_, surface_, surface_, context_)) {
+    // Prefer WindowSurface if available, otherwise use Pbuffer
+    EGLSurface target = (window_surface_ != EGL_NO_SURFACE) ? window_surface_ : surface_;
+    if (target == EGL_NO_SURFACE) {
+        return false;
+    }
+    if (!eglMakeCurrent(display_, target, target, context_)) {
         spdlog::error("eglMakeCurrent failed: 0x{:x}", eglGetError());
         return false;
     }
@@ -205,12 +251,6 @@ bool EGLContextManager::Resize(uint32_t width, uint32_t height) {
 
     spdlog::info("EGL surface resized to {}x{}", width, height);
     return true;
-}
-
-void EGLContextManager::SwapBuffers() {
-    if (display_ != EGL_NO_DISPLAY && surface_ != EGL_NO_SURFACE) {
-        eglSwapBuffers(display_, surface_);
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -429,6 +469,165 @@ void EGLContextManager::DestroyIOSurfaceResources() {
 }
 
 // ---------------------------------------------------------------------------
+// Android: Initialize EGL directly with a WindowSurface (no Pbuffer)
+// ---------------------------------------------------------------------------
+
+bool EGLContextManager::InitializeWithWindow(void* window,
+                                              uint32_t width, uint32_t height) {
+#if defined(__ANDROID__)
+    if (!window || width == 0 || height == 0) {
+        EGL_LOGE("InitializeWithWindow: invalid parameters (window=%p, %ux%u)",
+                 window, width, height);
+        return false;
+    }
+
+    if (context_ != EGL_NO_CONTEXT) {
+        EGL_LOGI("InitializeWithWindow: context already exists, destroying first");
+        Destroy();
+    }
+
+    // 1. Get EGL display — use ANGLE's platform display extension
+    //    to avoid conflicts with Flutter Impeller's system EGL
+    EGL_LOGI("InitializeWithWindow: trying eglGetPlatformDisplayEXT(EGL_PLATFORM_ANGLE_ANGLE)");
+    auto eglGetPlatformDisplayEXT_ =
+        reinterpret_cast<PFNEGLGETPLATFORMDISPLAYEXTPROC>(
+            eglGetProcAddress("eglGetPlatformDisplayEXT"));
+    if (eglGetPlatformDisplayEXT_) {
+        const EGLint displayAttribs[] = {
+            EGL_PLATFORM_ANGLE_TYPE_ANGLE,
+            EGL_PLATFORM_ANGLE_TYPE_OPENGLES_ANGLE,
+            EGL_NONE
+        };
+        display_ = eglGetPlatformDisplayEXT_(
+            EGL_PLATFORM_ANGLE_ANGLE, EGL_DEFAULT_DISPLAY, displayAttribs);
+        EGL_LOGI("InitializeWithWindow: eglGetPlatformDisplayEXT returned %p", display_);
+    }
+    if (display_ == EGL_NO_DISPLAY) {
+        EGL_LOGI("InitializeWithWindow: fallback to eglGetDisplay");
+        display_ = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    }
+    if (display_ == EGL_NO_DISPLAY) {
+        EGL_LOGE("InitializeWithWindow: eglGetDisplay failed: 0x%x", eglGetError());
+        return false;
+    }
+
+    // 2. Initialize EGL
+    EGLint majorVersion, minorVersion;
+    if (!eglInitialize(display_, &majorVersion, &minorVersion)) {
+        EGL_LOGE("InitializeWithWindow: eglInitialize failed: 0x%x", eglGetError());
+        display_ = EGL_NO_DISPLAY;
+        return false;
+    }
+    EGL_LOGI("InitializeWithWindow: EGL %d.%d vendor=%s",
+             majorVersion, minorVersion,
+             eglQueryString(display_, EGL_VENDOR));
+
+    // 3. Choose config — only need EGL_WINDOW_BIT (no Pbuffer)
+    EGLint configAttribs[] = {
+        EGL_SURFACE_TYPE,    EGL_WINDOW_BIT,
+        EGL_RED_SIZE,        8,
+        EGL_GREEN_SIZE,      8,
+        EGL_BLUE_SIZE,       8,
+        EGL_ALPHA_SIZE,      8,
+        EGL_DEPTH_SIZE,      0,
+        EGL_STENCIL_SIZE,    8,
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+        EGL_NONE
+    };
+
+    EGLint numConfigs = 0;
+    if (!eglChooseConfig(display_, configAttribs, &config_, 1, &numConfigs) ||
+        numConfigs == 0) {
+        EGL_LOGE("InitializeWithWindow: eglChooseConfig failed: 0x%x numConfigs=%d",
+                 eglGetError(), numConfigs);
+        eglTerminate(display_);
+        display_ = EGL_NO_DISPLAY;
+        return false;
+    }
+    EGL_LOGI("InitializeWithWindow: eglChooseConfig OK numConfigs=%d", numConfigs);
+
+    // 4. Create WindowSurface from ANativeWindow
+    auto* nativeWindow = static_cast<ANativeWindow*>(window);
+    ANativeWindow_acquire(nativeWindow);
+
+    EGLint surfAttribs[] = { EGL_NONE };
+    window_surface_ = eglCreateWindowSurface(display_, config_, nativeWindow, surfAttribs);
+    if (window_surface_ == EGL_NO_SURFACE) {
+        EGL_LOGE("InitializeWithWindow: eglCreateWindowSurface failed: 0x%x", eglGetError());
+        ANativeWindow_release(nativeWindow);
+        eglTerminate(display_);
+        display_ = EGL_NO_DISPLAY;
+        return false;
+    }
+    EGL_LOGI("InitializeWithWindow: WindowSurface created %ux%u", width, height);
+
+    // 5. Create GLES2 context
+    EGLint contextAttribs[] = {
+        EGL_CONTEXT_CLIENT_VERSION, 2,
+        EGL_NONE
+    };
+    context_ = eglCreateContext(display_, config_, EGL_NO_CONTEXT, contextAttribs);
+    if (context_ == EGL_NO_CONTEXT) {
+        EGL_LOGE("InitializeWithWindow: eglCreateContext failed: 0x%x", eglGetError());
+        eglDestroySurface(display_, window_surface_);
+        window_surface_ = EGL_NO_SURFACE;
+        ANativeWindow_release(nativeWindow);
+        eglTerminate(display_);
+        display_ = EGL_NO_DISPLAY;
+        return false;
+    }
+    EGL_LOGI("InitializeWithWindow: context created");
+
+    // 6. Make current with WindowSurface
+    if (!eglMakeCurrent(display_, window_surface_, window_surface_, context_)) {
+        EGL_LOGE("InitializeWithWindow: eglMakeCurrent failed: 0x%x", eglGetError());
+        eglDestroyContext(display_, context_);
+        context_ = EGL_NO_CONTEXT;
+        eglDestroySurface(display_, window_surface_);
+        window_surface_ = EGL_NO_SURFACE;
+        ANativeWindow_release(nativeWindow);
+        eglTerminate(display_);
+        display_ = EGL_NO_DISPLAY;
+        return false;
+    }
+    EGL_LOGI("InitializeWithWindow: MakeCurrent OK");
+
+    // Disable VSync wait — Flutter already controls frame pacing via its own
+    // Choreographer / VSync signal.  Without this, eglSwapBuffers blocks for
+    // one VSync period which desynchronises from Flutter's tick and causes
+    // visible flicker.
+    eglSwapInterval(display_, 0);
+
+    // Store state — no Pbuffer surface_ is created; window_surface_ is primary
+    native_window_ = nativeWindow;
+    window_width_ = width;
+    window_height_ = height;
+    width_ = width;
+    height_ = height;
+    // surface_ remains EGL_NO_SURFACE (no Pbuffer fallback)
+
+    // Log GL info
+    const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+    const char* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+    EGL_LOGI("InitializeWithWindow: GL_RENDERER=%s GL_VERSION=%s",
+             renderer ? renderer : "(null)",
+             version ? version : "(null)");
+
+    // Invalidate GL state cache
+    krkr::gl::InvalidateStateCache();
+
+    EGL_LOGI("InitializeWithWindow: success %ux%u", width, height);
+    return true;
+#else
+    (void)window;
+    (void)width;
+    (void)height;
+    spdlog::error("InitializeWithWindow: not supported on this platform");
+    return false;
+#endif
+}
+
+// ---------------------------------------------------------------------------
 // Android WindowSurface attachment (SurfaceTexture zero-copy rendering)
 // ---------------------------------------------------------------------------
 
@@ -472,6 +671,9 @@ bool EGLContextManager::AttachNativeWindow(void* window,
         return false;
     }
 
+    // Disable VSync wait — Flutter controls frame pacing
+    eglSwapInterval(display_, 0);
+
     native_window_ = nativeWindow;
     window_width_ = width;
     window_height_ = height;
@@ -495,9 +697,12 @@ void EGLContextManager::DetachNativeWindow() {
 void EGLContextManager::DestroyNativeWindowResources() {
 #if defined(__ANDROID__)
     if (native_window_) {
-        // Revert to Pbuffer surface
-        if (surface_ != EGL_NO_SURFACE) {
+        // Revert to Pbuffer surface if available
+        if (surface_ != EGL_NO_SURFACE && display_ != EGL_NO_DISPLAY && context_ != EGL_NO_CONTEXT) {
             eglMakeCurrent(display_, surface_, surface_, context_);
+        } else if (display_ != EGL_NO_DISPLAY) {
+            // No Pbuffer — just unbind
+            eglMakeCurrent(display_, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
         }
         if (window_surface_ != EGL_NO_SURFACE) {
             eglDestroySurface(display_, window_surface_);
