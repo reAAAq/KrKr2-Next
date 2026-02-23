@@ -6,6 +6,14 @@ if(IOS)
     add_library(engine_api STATIC
         src/engine_api.cpp
     )
+elseif(ANDROID)
+    # On Android, include the JNI entry point (JNI_OnLoad, Surface bridge)
+    # directly in engine_api.so so that System.loadLibrary("engine_api")
+    # triggers JNI_OnLoad and registers JNI native methods.
+    add_library(engine_api SHARED
+        src/engine_api.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../platforms/android/cpp/krkr2_android.cpp
+    )
 else()
     add_library(engine_api SHARED
         src/engine_api.cpp
@@ -75,3 +83,20 @@ endif()
 set_target_properties(engine_api PROPERTIES
     OUTPUT_NAME "engine_api"
 )
+
+# On Android, link ANGLE .so (Vulkan backend) and Android system libs
+if(ANDROID)
+    find_package(unofficial-angle CONFIG QUIET)
+    if(unofficial-angle_FOUND)
+        target_link_libraries(engine_api PRIVATE
+            unofficial::angle::libEGL
+            unofficial::angle::libGLESv2
+        )
+        message(STATUS "engine_api: Android ANGLE linked (Vulkan backend)")
+    else()
+        # Fallback: link system EGL/GLES2
+        target_link_libraries(engine_api PRIVATE EGL GLESv2)
+        message(STATUS "engine_api: Android fallback to system EGL/GLES2")
+    endif()
+    target_link_libraries(engine_api PRIVATE log android)
+endif()

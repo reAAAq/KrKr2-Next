@@ -17,7 +17,9 @@
 
 #include <csignal>
 #include <cstdlib>
+#if !defined(__ANDROID__)
 #include <execinfo.h>
+#endif
 
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
@@ -53,6 +55,7 @@ struct engine_handle_s {
   std::deque<engine_input_event_t> pending_input_events;
   bool native_mouse_callbacks_disabled = false;
   bool iosurface_attached = false;
+  bool native_window_attached = false;
   bool frame_rendered_this_tick = false;
 
   // Frame rate limiting (0 = unlimited / follow vsync)
@@ -94,7 +97,8 @@ std::shared_ptr<spdlog::logger> EnsureNamedLogger(const char* name) {
 void CrashSignalHandler(int sig) {
   spdlog::critical("FATAL SIGNAL {} received!", sig);
 
-  // Print a mini backtrace
+  // Print a mini backtrace (not available on Android)
+#if !defined(__ANDROID__)
   void* frames[32];
   int count = backtrace(frames, 32);
   char** symbols = backtrace_symbols(frames, count);
@@ -104,6 +108,7 @@ void CrashSignalHandler(int sig) {
     }
     free(symbols);
   }
+#endif
 
   spdlog::default_logger()->flush();
   // Re-raise so the OS generates a proper crash report
@@ -676,7 +681,16 @@ engine_result_t engine_tick(engine_handle_t handle, uint32_t delta_ms) {
 
   // In IOSurface mode, the engine renders directly to the shared IOSurface
   // via the FBO — no need for glReadPixels. Skip the expensive readback.
-  if (!impl->iosurface_attached) {
+  if (impl->native_window_attached) {
+    // Android WindowSurface mode — eglSwapBuffers delivers frame
+    // to Flutter's SurfaceTexture automatically (GPU zero-copy).
+    auto& egl = krkr::GetEngineEGLContext();
+    if (egl.HasNativeWindow()) {
+      eglSwapBuffers(egl.GetDisplay(), egl.GetWindowSurface());
+    }
+    impl->frame_serial += 1;
+    impl->frame_ready = true;
+  } else if (!impl->iosurface_attached) {
     // Legacy Pbuffer readback path (slow, for backward compatibility)
     const FrameReadbackLayout layout = GetFrameReadbackLayoutLocked(impl);
     const size_t required_size =
@@ -1256,6 +1270,84 @@ engine_result_t engine_set_render_target_iosurface(engine_handle_t handle,
       impl,
       ENGINE_RESULT_NOT_SUPPORTED,
       "IOSurface render target is only supported on macOS");
+#endif
+}
+
+engine_result_t engine_set_render_target_surface(engine_handle_t handle,
+                                                  void* native_window,
+                                                  uint32_t width,
+                                                  uint32_t height) {
+  std::lock_guard<std::recursive_mutex> registry_guard(g_registry_mutex);
+  engine_handle_s* impl = nullptr;
+  auto result = ValidateHandleLocked(handle, &impl);
+  if (result != ENGINE_RESULT_OK) {
+    return result;
+  }
+
+  std::lock_guard<std::recursive_mutex> guard(impl->mutex);
+  result = ValidateHandleThreadLocked(impl);
+  if (result != ENGINE_RESULT_OK) {
+    return result;
+  }
+
+  if (!g_runtime_active || g_runtime_owner != handle) {
+    return SetHandleErrorAndReturnLocked(
+        impl,
+        ENGINE_RESULT_INVALID_STATE,
+        "engine_open_game must succeed before engine_set_render_target_surface");
+  }
+
+#if defined(__ANDROID__)
+  auto& egl = krkr::GetEngineEGLContext();
+  if (!egl.IsValid()) {
+    return SetHandleErrorAndReturnLocked(
+        impl,
+        ENGINE_RESULT_INVALID_STATE,
+        "EGL context not initialized");
+  }
+
+  if (native_window == nullptr) {
+    // Detach — revert to Pbuffer mode
+    egl.DetachNativeWindow();
+    impl->native_window_attached = false;
+    spdlog::info("engine_set_render_target_surface: detached, Pbuffer mode");
+  } else {
+    if (width == 0 || height == 0) {
+      return SetHandleErrorAndReturnLocked(
+          impl,
+          ENGINE_RESULT_INVALID_ARGUMENT,
+          "width and height must be > 0 when setting Surface");
+    }
+    if (!egl.AttachNativeWindow(native_window, width, height)) {
+      return SetHandleErrorAndReturnLocked(
+          impl,
+          ENGINE_RESULT_INTERNAL_ERROR,
+          "failed to attach Android Surface as render target");
+    }
+    impl->native_window_attached = true;
+    spdlog::info("engine_set_render_target_surface: attached {}x{}", width, height);
+
+    // Update window size for the draw device
+    if (TVPMainWindow) {
+      auto* dd = TVPMainWindow->GetDrawDevice();
+      if (dd) {
+        dd->SetWindowSize(static_cast<tjs_int>(width),
+                          static_cast<tjs_int>(height));
+      }
+    }
+  }
+
+  ClearHandleErrorLocked(impl);
+  SetThreadError(nullptr);
+  return ENGINE_RESULT_OK;
+#else
+  (void)native_window;
+  (void)width;
+  (void)height;
+  return SetHandleErrorAndReturnLocked(
+      impl,
+      ENGINE_RESULT_NOT_SUPPORTED,
+      "Surface render target is only supported on Android");
 #endif
 }
 
@@ -1854,6 +1946,26 @@ engine_result_t engine_set_render_target_iosurface(engine_handle_t handle,
 
   SetHandleErrorLocked(impl,
                        "engine_set_render_target_iosurface is not supported in stub build");
+  return ENGINE_RESULT_NOT_SUPPORTED;
+}
+
+engine_result_t engine_set_render_target_surface(engine_handle_t handle,
+                                                  void* native_window,
+                                                  uint32_t width,
+                                                  uint32_t height) {
+  (void)native_window;
+  (void)width;
+  (void)height;
+
+  std::lock_guard<std::recursive_mutex> registry_guard(g_registry_mutex);
+  engine_handle_s* impl = nullptr;
+  auto result = ValidateHandleLocked(handle, &impl);
+  if (result != ENGINE_RESULT_OK) {
+    return result;
+  }
+
+  SetHandleErrorLocked(impl,
+                       "engine_set_render_target_surface is not supported in stub build");
   return ENGINE_RESULT_NOT_SUPPORTED;
 }
 

@@ -222,6 +222,22 @@ ENGINE_API_EXPORT engine_result_t engine_set_render_target_iosurface(
     uint32_t width, uint32_t height);
 
 /*
+ * Sets an Android Surface (from SurfaceTexture) as the render target.
+ * When set, engine_tick renders to an EGL WindowSurface created from the
+ * ANativeWindow. eglSwapBuffers() delivers frames directly to Flutter's
+ * SurfaceTexture (GPU zero-copy).
+ *
+ * native_window: ANativeWindow* obtained from ANativeWindow_fromSurface().
+ *                Pass NULL to detach and revert to the default Pbuffer mode.
+ * width/height: Dimensions in pixels.
+ *
+ * Platform: Android only. Returns ENGINE_RESULT_NOT_SUPPORTED on other platforms.
+ */
+ENGINE_API_EXPORT engine_result_t engine_set_render_target_surface(
+    engine_handle_t handle, void* native_window,
+    uint32_t width, uint32_t height);
+
+/*
  * Queries whether the last engine_tick produced a new rendered frame.
  * out_
  *

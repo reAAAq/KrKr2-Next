@@ -14,11 +14,39 @@ add_compile_definitions(
         $<$<NOT:$<CONFIG:Debug>>:NDEBUG>
 )
 
-if(ANDROID)
+# Detect Android build: Gradle may set CMAKE_SYSTEM_NAME=Android or VCPKG_TARGET_ANDROID=ON
+# before project() is called; the ANDROID variable is only set after project().
+if(VCPKG_TARGET_ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "Android")
     set(VCPKG_TARGET_ANDROID ON)
-    set(ENV{ANDROID_NDK_HOME} "$ENV{ANDROID_NDK}")
-    add_compile_options(-Wno-inconsistent-missing-override)
-    include(cmake/vcpkg_android.cmake)
+    # Gradle passes ANDROID_NDK as a CMake -D variable, propagate it to env
+    if(DEFINED ANDROID_NDK AND NOT DEFINED ENV{ANDROID_NDK_HOME})
+        set(ENV{ANDROID_NDK_HOME} "${ANDROID_NDK}")
+    elseif(DEFINED CMAKE_ANDROID_NDK AND NOT DEFINED ENV{ANDROID_NDK_HOME})
+        set(ENV{ANDROID_NDK_HOME} "${CMAKE_ANDROID_NDK}")
+    elseif(DEFINED ENV{ANDROID_NDK})
+        set(ENV{ANDROID_NDK_HOME} "$ENV{ANDROID_NDK}")
+    endif()
+    # If Gradle already set CMAKE_TOOLCHAIN_FILE to vcpkg and VCPKG_CHAINLOAD_TOOLCHAIN_FILE
+    # to the Android NDK toolchain, we only need to set VCPKG_TARGET_TRIPLET here.
+    # Otherwise, fall back to the vcpkg_android.cmake helper.
+    if(DEFINED VCPKG_CHAINLOAD_TOOLCHAIN_FILE)
+        # Gradle already configured the toolchain chain; just set the triplet
+        if(DEFINED VCPKG_ROOT AND NOT DEFINED ENV{VCPKG_ROOT})
+            set(ENV{VCPKG_ROOT} "${VCPKG_ROOT}")
+        endif()
+        if(ANDROID_ABI MATCHES "arm64-v8a")
+            set(VCPKG_TARGET_TRIPLET "arm64-android" CACHE STRING "" FORCE)
+        elseif(ANDROID_ABI MATCHES "armeabi-v7a")
+            set(VCPKG_TARGET_TRIPLET "arm-android" CACHE STRING "" FORCE)
+        elseif(ANDROID_ABI MATCHES "x86_64")
+            set(VCPKG_TARGET_TRIPLET "x64-android" CACHE STRING "" FORCE)
+        elseif(ANDROID_ABI MATCHES "x86")
+            set(VCPKG_TARGET_TRIPLET "x86-android" CACHE STRING "" FORCE)
+        endif()
+        message(STATUS "Android build with Gradle-managed toolchain: triplet=${VCPKG_TARGET_TRIPLET}")
+    else()
+        include(cmake/vcpkg_android.cmake)
+    endif()
 else()
     set(CMAKE_TOOLCHAIN_FILE $ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake)
 endif()
@@ -26,6 +54,10 @@ endif()
 set(APP_NAME krkr2)
 
 project(${APP_NAME})
+
+if(ANDROID)
+    add_compile_options(-Wno-inconsistent-missing-override)
+endif()
 
 option(ENABLE_TESTS "enable tests execute build(exclude android)" ON)
 option(BUILD_TOOLS "build tools execute build(exclude android ios)" ON)
@@ -45,9 +77,15 @@ if(MSVC)
 endif()
 
 if(ANDROID)
-    add_library(${PROJECT_NAME} SHARED ${CMAKE_CURRENT_SOURCE_DIR}/platforms/android/cpp/krkr2_android.cpp)
-    find_package(unofficial-breakpad CONFIG REQUIRED)
-    target_link_libraries(${PROJECT_NAME} PUBLIC unofficial::breakpad::libbreakpad_client)
+    if(BUILD_ENGINE_API)
+        # When BUILD_ENGINE_API is ON (Flutter build), krkr2_android.cpp is compiled
+        # directly into libengine_api.so, so we don't need a separate libkrkr2.so.
+        # Just skip building the standalone krkr2 target.
+    else()
+        add_library(${PROJECT_NAME} SHARED ${CMAKE_CURRENT_SOURCE_DIR}/platforms/android/cpp/krkr2_android.cpp)
+        find_package(unofficial-breakpad CONFIG REQUIRED)
+        target_link_libraries(${PROJECT_NAME} PUBLIC unofficial::breakpad::libbreakpad_client)
+    endif()
 elseif(LINUX)
     add_executable(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/platforms/linux/main.cpp)
 elseif(WINDOWS)
