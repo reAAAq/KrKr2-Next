@@ -24,8 +24,10 @@ class EngineInputEventType {
 enum EngineSurfaceMode {
   /// GPU zero-copy mode (macOS: IOSurface, Android: SurfaceTexture).
   gpuZeroCopy,
+
   /// Flutter Texture with RGBA pixel upload (cross-platform, slower).
   texture,
+
   /// Pure software decoding via RawImage (slowest, always works).
   software,
 }
@@ -81,6 +83,10 @@ class EngineSurfaceState extends State<EngineSurface> {
   // SurfaceTexture zero-copy mode (Android)
   int? _surfaceTextureId;
   bool _surfaceTextureInitInFlight = false;
+  Size _lastRequestedLogicalSize = Size.zero;
+  double _lastRequestedDpr = 1.0;
+  EngineInputEventData? _pendingPointerMoveEvent;
+  bool _pointerMoveFlushScheduled = false;
 
   @override
   void initState() {
@@ -156,7 +162,8 @@ class EngineSurfaceState extends State<EngineSurface> {
   /// directly instead of calling [engineGetFrameRenderedFlag] again.
   /// This avoids the double-read problem where the flag is reset on the
   /// first read and the second read always sees false.
-  Future<void> pollFrame({bool? rendered}) => _pollFrame(externalRendered: rendered);
+  Future<void> pollFrame({bool? rendered}) =>
+      _pollFrame(externalRendered: rendered);
 
   Future<void> _ensureSurfaceSize(Size size, double devicePixelRatio) async {
     if (!widget.active) {
@@ -235,12 +242,12 @@ class EngineSurfaceState extends State<EngineSurface> {
         if (result != null && mounted) {
           final int newIOSurfaceId = result['ioSurfaceID'] as int;
           // Tell the engine about the new IOSurface
-          final int setResult =
-              await widget.bridge.engineSetRenderTargetIOSurface(
-            iosurfaceId: newIOSurfaceId,
-            width: _surfaceWidth,
-            height: _surfaceHeight,
-          );
+          final int setResult = await widget.bridge
+              .engineSetRenderTargetIOSurface(
+                iosurfaceId: newIOSurfaceId,
+                width: _surfaceWidth,
+                height: _surfaceHeight,
+              );
           if (setResult == 0) {
             _ioSurfaceId = newIOSurfaceId;
             _frameWidth = _surfaceWidth;
@@ -281,8 +288,7 @@ class EngineSurfaceState extends State<EngineSurface> {
       final int ioSurfaceId = result['ioSurfaceID'] as int;
 
       // Tell the C++ engine to render to this IOSurface
-      final int setResult =
-          await widget.bridge.engineSetRenderTargetIOSurface(
+      final int setResult = await widget.bridge.engineSetRenderTargetIOSurface(
         iosurfaceId: ioSurfaceId,
         width: _surfaceWidth,
         height: _surfaceHeight,
@@ -419,9 +425,7 @@ class EngineSurfaceState extends State<EngineSurface> {
   // --- Legacy texture mode ---
 
   Future<void> _ensureTexture() async {
-    if (!widget.active ||
-        _textureInitInFlight ||
-        _textureId != null) {
+    if (!widget.active || _textureInitInFlight || _textureId != null) {
       return;
     }
 
@@ -479,16 +483,15 @@ class EngineSurfaceState extends State<EngineSurface> {
         // mode), use that value directly to avoid the double-read problem.
         // engineGetFrameRenderedFlag resets the flag on read, so a second
         // read would always return false.
-        final bool rendered = externalRendered ??
+        final bool rendered =
+            externalRendered ??
             await widget.bridge.engineGetFrameRenderedFlag();
         if (rendered && mounted) {
-          final int activeZeroCopyTextureId = _ioSurfaceTextureId ?? _surfaceTextureId!;
+          final int activeZeroCopyTextureId =
+              _ioSurfaceTextureId ?? _surfaceTextureId!;
           await widget.bridge.notifyFrameAvailable(
             textureId: activeZeroCopyTextureId,
           );
-          setState(() {
-            _lastFrameSerial += 1;
-          });
         }
         return;
       }
@@ -606,10 +609,7 @@ class EngineSurfaceState extends State<EngineSurface> {
       child: SizedBox(
         width: logicalW,
         height: logicalH,
-        child: Texture(
-          textureId: textureId,
-          filterQuality: FilterQuality.medium,
-        ),
+        child: Texture(textureId: textureId, filterQuality: FilterQuality.none),
       ),
     );
   }
@@ -623,16 +623,12 @@ class EngineSurfaceState extends State<EngineSurface> {
     return 0; // left (default)
   }
 
-  void _sendPointer({
+  EngineInputEventData _buildPointerEventData({
     required int type,
     required PointerEvent event,
     double? deltaX,
     double? deltaY,
   }) {
-    if (!widget.active) {
-      return;
-    }
-
     // Map pointer position from Listener's logical coordinate space
     // to the engine surface's physical pixel coordinates.
     //
@@ -643,21 +639,78 @@ class EngineSurfaceState extends State<EngineSurface> {
     // The C++ side (DrawDevice::TransformToPrimaryLayerManager)
     // then maps these surface coordinates → primary layer coordinates.
     final double dpr = _devicePixelRatio > 0 ? _devicePixelRatio : 1.0;
+    return EngineInputEventData(
+      type: type,
+      timestampMicros: event.timeStamp.inMicroseconds,
+      x: event.localPosition.dx * dpr,
+      y: event.localPosition.dy * dpr,
+      deltaX: (deltaX ?? event.delta.dx) * dpr,
+      deltaY: (deltaY ?? event.delta.dy) * dpr,
+      pointerId: event.pointer,
+      button: _flutterButtonsToEngineButton(event.buttons),
+    );
+  }
 
+  void _sendPointer({
+    required int type,
+    required PointerEvent event,
+    double? deltaX,
+    double? deltaY,
+  }) {
+    if (!widget.active) {
+      return;
+    }
     unawaited(
       _sendInputEvent(
-        EngineInputEventData(
+        _buildPointerEventData(
           type: type,
-          timestampMicros: event.timeStamp.inMicroseconds,
-          x: event.localPosition.dx * dpr,
-          y: event.localPosition.dy * dpr,
-          deltaX: (deltaX ?? event.delta.dx) * dpr,
-          deltaY: (deltaY ?? event.delta.dy) * dpr,
-          pointerId: event.pointer,
-          button: _flutterButtonsToEngineButton(event.buttons),
+          event: event,
+          deltaX: deltaX,
+          deltaY: deltaY,
         ),
       ),
     );
+  }
+
+  void _sendCoalescedPointerMove(PointerEvent event) {
+    if (!widget.active) {
+      return;
+    }
+    _pendingPointerMoveEvent = _buildPointerEventData(
+      type: EngineInputEventType.pointerMove,
+      event: event,
+    );
+    if (_pointerMoveFlushScheduled) {
+      return;
+    }
+    _pointerMoveFlushScheduled = true;
+    SchedulerBinding.instance.scheduleFrameCallback((_) {
+      _pointerMoveFlushScheduled = false;
+      if (!mounted || !widget.active) {
+        _pendingPointerMoveEvent = null;
+        return;
+      }
+      final EngineInputEventData? pending = _pendingPointerMoveEvent;
+      _pendingPointerMoveEvent = null;
+      if (pending != null) {
+        unawaited(_sendInputEvent(pending));
+      }
+    });
+  }
+
+  void _ensureSurfaceSizeIfNeeded(Size size, double devicePixelRatio) {
+    if (!widget.active || !size.isFinite) {
+      return;
+    }
+    final double normalizedDpr = devicePixelRatio <= 0 ? 1.0 : devicePixelRatio;
+    if ((_lastRequestedLogicalSize.width - size.width).abs() < 0.01 &&
+        (_lastRequestedLogicalSize.height - size.height).abs() < 0.01 &&
+        (_lastRequestedDpr - normalizedDpr).abs() < 0.001) {
+      return;
+    }
+    _lastRequestedLogicalSize = size;
+    _lastRequestedDpr = normalizedDpr;
+    unawaited(_ensureSurfaceSize(size, normalizedDpr));
   }
 
   Future<void> _sendInputEvent(EngineInputEventData event) async {
@@ -713,13 +766,14 @@ class EngineSurfaceState extends State<EngineSurface> {
 
   @override
   Widget build(BuildContext context) {
-    final int? activeTextureId = _ioSurfaceTextureId ?? _surfaceTextureId ?? _textureId;
+    final int? activeTextureId =
+        _ioSurfaceTextureId ?? _surfaceTextureId ?? _textureId;
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final Size size = Size(constraints.maxWidth, constraints.maxHeight);
         final double dpr = MediaQuery.of(context).devicePixelRatio;
-        unawaited(_ensureSurfaceSize(size, dpr));
+        _ensureSurfaceSizeIfNeeded(size, dpr);
 
         return Focus(
           focusNode: _focusNode,
@@ -735,22 +789,13 @@ class EngineSurfaceState extends State<EngineSurface> {
               );
             },
             onPointerMove: (event) {
-              _sendPointer(
-                type: EngineInputEventType.pointerMove,
-                event: event,
-              );
+              _sendCoalescedPointerMove(event);
             },
             onPointerUp: (event) {
-              _sendPointer(
-                type: EngineInputEventType.pointerUp,
-                event: event,
-              );
+              _sendPointer(type: EngineInputEventType.pointerUp, event: event);
             },
             onPointerHover: (event) {
-              _sendPointer(
-                type: EngineInputEventType.pointerMove,
-                event: event,
-              );
+              _sendCoalescedPointerMove(event);
             },
             onPointerSignal: (PointerSignalEvent signal) {
               if (signal is PointerScrollEvent) {
@@ -775,7 +820,7 @@ class EngineSurfaceState extends State<EngineSurface> {
                     RawImage(
                       image: _frameImage,
                       fit: BoxFit.contain,
-                      filterQuality: FilterQuality.medium,
+                      filterQuality: FilterQuality.none,
                     ),
                 ],
               ),
