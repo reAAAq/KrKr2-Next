@@ -38,7 +38,8 @@ bool TVPEngineBootstrap::s_initialized = false;
 // Public API
 // ---------------------------------------------------------------------------
 
-bool TVPEngineBootstrap::Initialize(uint32_t width, uint32_t height) {
+bool TVPEngineBootstrap::Initialize(uint32_t width, uint32_t height,
+                                    krkr::AngleBackend backend) {
     if (s_initialized) {
         spdlog::warn("TVPEngineBootstrap::Initialize called but already initialized");
         return true;
@@ -51,7 +52,7 @@ bool TVPEngineBootstrap::Initialize(uint32_t width, uint32_t height) {
     spdlog::default_logger()->flush();
 
     // 2. Create ANGLE EGL context for headless rendering
-    InitializeGraphics(width, height);
+    InitializeGraphics(width, height, backend);
     spdlog::default_logger()->flush();
 
     // 2.5. Force-link the OpenGL render manager so it survives static library
@@ -107,9 +108,10 @@ bool TVPEngineBootstrap::IsInitialized() {
 // Private helpers
 // ---------------------------------------------------------------------------
 
-void TVPEngineBootstrap::InitializeGraphics(uint32_t width, uint32_t height) {
+void TVPEngineBootstrap::InitializeGraphics(uint32_t width, uint32_t height,
+                                             krkr::AngleBackend backend) {
     auto& egl = krkr::GetEngineEGLContext();
-    if (!egl.Initialize(width, height)) {
+    if (!egl.Initialize(width, height, backend)) {
         spdlog::error("EngineBootstrap: EGL context initialization failed, "
                        "rendering may not work correctly");
         return;

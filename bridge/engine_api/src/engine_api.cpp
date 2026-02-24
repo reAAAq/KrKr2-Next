@@ -67,6 +67,9 @@ struct engine_handle_s {
   bool frame_rendered_this_tick = false;
   uint64_t tick_count = 0;
 
+  // ANGLE backend selection (Android only; other platforms ignore this)
+  krkr::AngleBackend angle_backend = krkr::AngleBackend::OpenGLES;
+
   // Frame rate limiting (0 = unlimited / follow vsync)
   uint32_t fps_limit = 0;
   uint64_t frame_interval_us = 0;
@@ -209,11 +212,12 @@ void ClearHandleErrorLocked(engine_handle_s* impl) {
   impl->last_error.clear();
 }
 
-bool EnsureEngineRuntimeInitialized(uint32_t width, uint32_t height) {
+bool EnsureEngineRuntimeInitialized(uint32_t width, uint32_t height,
+                                    krkr::AngleBackend backend = krkr::AngleBackend::OpenGLES) {
   if (g_engine_bootstrapped) {
     return true;
   }
-  if (!TVPEngineBootstrap::Initialize(width, height)) {
+  if (!TVPEngineBootstrap::Initialize(width, height, backend)) {
     return false;
   }
   g_engine_bootstrapped = true;
@@ -506,7 +510,7 @@ engine_result_t engine_open_game(engine_handle_t handle,
   TVPTerminateOnNoWindowStartup = false;
   TVPHostSuppressProcessExit = true;
 
-  if (!EnsureEngineRuntimeInitialized(impl->surface_width, impl->surface_height)) {
+  if (!EnsureEngineRuntimeInitialized(impl->surface_width, impl->surface_height, impl->angle_backend)) {
     return SetHandleErrorAndReturnLocked(
         impl,
         ENGINE_RESULT_INTERNAL_ERROR,
@@ -661,7 +665,7 @@ engine_result_t engine_tick(engine_handle_t handle, uint32_t delta_ms) {
           // to create EGL display + context + WindowSurface in one step,
           // bypassing Pbuffer which may not be supported on this device.
           AndroidInfoLog("engine_tick: EGL not valid, InitializeWithWindow %ux%u", win_w, win_h);
-          if (egl.InitializeWithWindow(pending_window, win_w, win_h)) {
+          if (egl.InitializeWithWindow(pending_window, win_w, win_h, impl->angle_backend)) {
             attached = true;
             AndroidInfoLog("engine_tick: InitializeWithWindow success");
           } else {
@@ -962,6 +966,20 @@ engine_result_t engine_set_option(engine_handle_t handle,
     impl->fps_limit_initialized = false;
     spdlog::info("engine_set_option: fps_limit={} (interval={}us)",
                  impl->fps_limit, impl->frame_interval_us);
+    ClearHandleErrorLocked(impl);
+    SetThreadError(nullptr);
+    return ENGINE_RESULT_OK;
+  }
+
+  // Handle angle_backend option: controls ANGLE EGL backend (Android only)
+  if (key == "angle_backend") {
+    const std::string val(option->value_utf8);
+    if (val == "vulkan") {
+      impl->angle_backend = krkr::AngleBackend::Vulkan;
+    } else {
+      impl->angle_backend = krkr::AngleBackend::OpenGLES;
+    }
+    spdlog::info("engine_set_option: angle_backend={}", option->value_utf8);
     ClearHandleErrorLocked(impl);
     SetThreadError(nullptr);
     return ENGINE_RESULT_OK;

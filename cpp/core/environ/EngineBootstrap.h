@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <string>
+#include "krkr_egl_context.h"  // for krkr::AngleBackend
 
 class TVPEngineBootstrap {
 public:
@@ -27,7 +28,8 @@ public:
      * @param height  Initial surface height in pixels
      * @return true on success
      */
-    static bool Initialize(uint32_t width, uint32_t height);
+    static bool Initialize(uint32_t width, uint32_t height,
+                           krkr::AngleBackend backend = krkr::AngleBackend::OpenGLES);
 
     /**
      * Shut down the engine runtime and destroy the EGL context.
@@ -49,7 +51,8 @@ public:
     static bool IsInitialized();
 
 private:
-    static void InitializeGraphics(uint32_t width, uint32_t height);
+    static void InitializeGraphics(uint32_t width, uint32_t height,
+                                   krkr::AngleBackend backend = krkr::AngleBackend::OpenGLES);
     static void InitializeLocale();
 
     static bool s_initialized;

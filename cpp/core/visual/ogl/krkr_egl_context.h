@@ -20,6 +20,15 @@
 
 namespace krkr {
 
+/**
+ * ANGLE EGL backend type for Android platform.
+ * On macOS/iOS, Metal is always used regardless of this setting.
+ */
+enum class AngleBackend {
+    OpenGLES,   ///< EGL_PLATFORM_ANGLE_TYPE_OPENGLES_ANGLE (default)
+    Vulkan,     ///< EGL_PLATFORM_ANGLE_TYPE_VULKAN_ANGLE
+};
+
 class EGLContextManager {
 public:
     EGLContextManager() = default;
@@ -37,7 +46,8 @@ public:
      * @param height  Initial surface height in pixels
      * @return true on success
      */
-    bool Initialize(uint32_t width, uint32_t height);
+    bool Initialize(uint32_t width, uint32_t height,
+                    AngleBackend backend = AngleBackend::OpenGLES);
 
     /**
      * Destroy the EGL context, surface, and display.
@@ -116,7 +126,8 @@ public:
      * @param height  Surface height in pixels
      * @return true on success
      */
-    bool InitializeWithWindow(void* window, uint32_t width, uint32_t height);
+    bool InitializeWithWindow(void* window, uint32_t width, uint32_t height,
+                              AngleBackend backend = AngleBackend::OpenGLES);
 
     /**
      * Attach an Android ANativeWindow as the render target.
@@ -192,6 +203,9 @@ private:
     EGLConfig  config_    = nullptr;
     uint32_t   width_     = 0;
     uint32_t   height_    = 0;
+
+    // ANGLE backend type (Android only; macOS/iOS always use Metal)
+    AngleBackend angle_backend_ = AngleBackend::OpenGLES;
 
     // IOSurface FBO resources (macOS zero-copy rendering)
     EGLSurface iosurface_pbuffer_   = EGL_NO_SURFACE;
