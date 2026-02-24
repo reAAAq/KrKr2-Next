@@ -16,6 +16,8 @@
 #include "tjsLex.h"
 #include <algorithm>
 
+
+
 namespace TJS {
     //---------------------------------------------------------------------------
     // throwing error functions
@@ -439,12 +441,7 @@ namespace TJS {
     // tTJSVariantString
     //---------------------------------------------------------------------------
     void tTJSVariantString::Release() {
-        /*
-                if(!this) return;
-                        // this is not a REAL remedy, but enough to
-           buster careless misses...
-                        // (nullptr->Release() problem)
-        */
+        if(!this) return;
 
         if(RefCount == 0) {
             TJSDeallocStringHeap(this);

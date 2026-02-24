@@ -55,7 +55,7 @@ namespace TJS {
     }
 
     //---------------------------------------------------------------------------
-    tjs_int64 tTJSString::AsInteger() const { return Ptr->ToInteger(); }
+    tjs_int64 tTJSString::AsInteger() const { return Ptr ? Ptr->ToInteger() : 0; }
 
     //---------------------------------------------------------------------------
     void tTJSString::Replace(const tTJSString &from, const tTJSString &to,

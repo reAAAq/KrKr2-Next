@@ -795,6 +795,8 @@ namespace TJS {
             // returns String
             if(vt != tvtString)
                 TJSThrowVariantConvertError(*this, tvtString);
+            if(!String)
+                return TJS_W("");
             return *String;
         }
 
@@ -866,7 +868,7 @@ namespace TJS {
                 case tvtObject:
                     TJSThrowVariantConvertError(*this, tvtInteger);
                 case tvtString:
-                    return String->ToInteger();
+                    return String ? String->ToInteger() : 0;
                 case tvtInteger:
                     return Integer;
                 case tvtReal:
@@ -886,7 +888,7 @@ namespace TJS {
                 case tvtObject:
                     TJSThrowVariantConvertError(*this, tvtInteger, tvtReal);
                 case tvtString:
-                    String->ToNumber(targ);
+                    if(String) String->ToNumber(targ); else targ = (tjs_int)0;
                     return;
                 case tvtInteger:
                     targ = Integer;
@@ -943,7 +945,7 @@ namespace TJS {
                 case tvtObject:
                     TJSThrowVariantConvertError(*this, tvtReal);
                 case tvtString:
-                    return String->ToReal();
+                    return String ? String->ToReal() : 0;
                 case tvtInteger:
                     return (tTVReal)Integer;
                 case tvtReal:
@@ -1163,7 +1165,7 @@ namespace TJS {
 
             if(vt == tvtString) {
                 tTJSVariant val;
-                String->ToNumber(val);
+                if(String) String->ToNumber(val); else val = 0;
                 return val;
             }
 

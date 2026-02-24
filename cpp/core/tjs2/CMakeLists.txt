@@ -4,6 +4,13 @@ project(tjs2)
 add_library(${PROJECT_NAME} STATIC)
 target_compile_definitions(${PROJECT_NAME} PRIVATE $<$<CONFIG:Debug>:_DEBUG>)
 
+# TJS2 engine legacy code relies on if(!this) null checks inside member functions.
+# This is UB in C++ and modern compilers (GCC/Clang -O2+) will optimize these away.
+# This flag prevents that optimization, ensuring null-this checks remain effective.
+if(NOT MSVC)
+    target_compile_options(${PROJECT_NAME} PRIVATE -fno-delete-null-pointer-checks)
+endif()
+
 set(GEN_CODE_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/gen)
 
 if(WINDOWS)

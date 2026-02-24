@@ -934,8 +934,9 @@ namespace TJS {
 
     //---------------------------------------------------------------------------
     void tTJSVariant::increment() {
-        if(vt == tvtString)
-            String->ToNumber(*this);
+        if(vt == tvtString) {
+            if(String) String->ToNumber(*this); else { vt = tvtInteger; Integer = 0; }
+        }
 
         if(vt == tvtReal) {
             TJSSetFPUE();
@@ -950,8 +951,9 @@ namespace TJS {
 
     //---------------------------------------------------------------------------
     void tTJSVariant::decrement() {
-        if(vt == tvtString)
-            String->ToNumber(*this);
+        if(vt == tvtString) {
+            if(String) String->ToNumber(*this); else { vt = tvtInteger; Integer = 0; }
+        }
 
         if(vt == tvtReal) {
             TJSSetFPUE();
@@ -1075,7 +1077,7 @@ namespace TJS {
             return; // nothing to do
 
         if(vt == tvtString) {
-            String->ToNumber(*this);
+            if(String) String->ToNumber(*this); else *this = 0;
             return;
         }
 
