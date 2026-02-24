@@ -28,6 +28,8 @@ class _HomePageState extends State<HomePage> {
   final GameManager _gameManager = GameManager();
   bool _loading = true;
   String? _iosGamesDir;
+  // On Android/iOS the engine is always built-in; EngineMode switching is
+  // only meaningful on desktop platforms.
   EngineMode _engineMode = EngineMode.builtIn;
   String? _customDylibPath;
   String? _builtInDylibPath;
@@ -75,11 +77,17 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadGames() async {
     final prefs = await SharedPreferences.getInstance();
-    final modeStr = prefs.getString(PrefsKeys.engineMode);
-    _engineMode = modeStr == PrefsKeys.engineModeCustom ? EngineMode.custom : EngineMode.builtIn;
-    _customDylibPath = prefs.getString(PrefsKeys.dylibPath);
     _builtInDylibPath = _resolveBuiltInDylibPath();
     _builtInAvailable = _builtInDylibPath != null;
+    if (Platform.isAndroid || Platform.isIOS) {
+      // Mobile platforms always use the bundled engine; skip mode loading.
+      _engineMode = EngineMode.builtIn;
+      _customDylibPath = null;
+    } else {
+      final modeStr = prefs.getString(PrefsKeys.engineMode);
+      _engineMode = modeStr == PrefsKeys.engineModeCustom ? EngineMode.custom : EngineMode.builtIn;
+      _customDylibPath = prefs.getString(PrefsKeys.dylibPath);
+    }
     _perfOverlay = prefs.getBool(PrefsKeys.perfOverlay) ?? false;
     _fpsLimitEnabled = prefs.getBool(PrefsKeys.fpsLimitEnabled) ?? false;
     _targetFps = prefs.getInt(PrefsKeys.targetFps) ?? PrefsKeys.defaultFps;
@@ -401,8 +409,11 @@ class _HomePageState extends State<HomePage> {
     );
     if (result != null && mounted) {
       setState(() {
-        _engineMode = result.engineMode;
-        _customDylibPath = result.customDylibPath;
+        // On mobile the engine mode is always builtIn, so we skip updating it.
+        if (!Platform.isAndroid && !Platform.isIOS) {
+          _engineMode = result.engineMode;
+          _customDylibPath = result.customDylibPath;
+        }
         _perfOverlay = result.perfOverlay;
         _fpsLimitEnabled = result.fpsLimitEnabled;
         _targetFps = result.targetFps;
@@ -422,24 +433,26 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: Text(l10n.appTitle),
         actions: [
-          Tooltip(
-            message: _engineMode == EngineMode.builtIn
-                ? (_builtInAvailable
-                    ? l10n.builtInReady
-                    : l10n.builtInNotReady)
-                : (_customDylibPath != null
-                    ? _customDylibPath!.split('/').last
-                    : l10n.customNotSet),
-            child: Icon(
-              _engineMode == EngineMode.builtIn
-                  ? Icons.inventory_2
-                  : Icons.extension,
-              color: _effectiveDylibPath != null
-                  ? colorScheme.primary
-                  : colorScheme.error,
-              size: 22,
+          // Engine status icon — only shown on desktop where engine switching is available.
+          if (!Platform.isAndroid && !Platform.isIOS)
+            Tooltip(
+              message: _engineMode == EngineMode.builtIn
+                  ? (_builtInAvailable
+                      ? l10n.builtInReady
+                      : l10n.builtInNotReady)
+                  : (_customDylibPath != null
+                      ? _customDylibPath!.split('/').last
+                      : l10n.customNotSet),
+              child: Icon(
+                _engineMode == EngineMode.builtIn
+                    ? Icons.inventory_2
+                    : Icons.extension,
+                color: _effectiveDylibPath != null
+                    ? colorScheme.primary
+                    : colorScheme.error,
+                size: 22,
+              ),
             ),
-          ),
           IconButton(
             icon: const Icon(Icons.settings),
             tooltip: l10n.settings,

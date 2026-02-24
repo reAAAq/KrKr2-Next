@@ -212,52 +212,55 @@ class _SettingsPageState extends State<SettingsPage> {
         body: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           children: [
-            // ── Engine section ──
-            _SectionHeader(
-              icon: Icons.settings_applications,
-              label: l10n.settingsEngine,
-            ),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(l10n.engineMode,
-                        style: Theme.of(context).textTheme.titleSmall),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: SegmentedButton<EngineMode>(
-                        segments: [
-                          ButtonSegment<EngineMode>(
-                            value: EngineMode.builtIn,
-                            label: Text(l10n.builtIn),
-                            icon: const Icon(Icons.inventory_2),
-                          ),
-                          ButtonSegment<EngineMode>(
-                            value: EngineMode.custom,
-                            label: Text(l10n.custom),
-                            icon: const Icon(Icons.folder_open),
-                          ),
-                        ],
-                        selected: {_engineMode},
-                        onSelectionChanged: (Set<EngineMode> selected) {
-                          setState(() => _engineMode = selected.first);
-                          _markDirty();
-                        },
+            // ── Engine section (desktop only) ──
+            // On Android/iOS the engine is always bundled; no switching needed.
+            if (!Platform.isAndroid && !Platform.isIOS) ...[
+              _SectionHeader(
+                icon: Icons.settings_applications,
+                label: l10n.settingsEngine,
+              ),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(l10n.engineMode,
+                          style: Theme.of(context).textTheme.titleSmall),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: SegmentedButton<EngineMode>(
+                          segments: [
+                            ButtonSegment<EngineMode>(
+                              value: EngineMode.builtIn,
+                              label: Text(l10n.builtIn),
+                              icon: const Icon(Icons.inventory_2),
+                            ),
+                            ButtonSegment<EngineMode>(
+                              value: EngineMode.custom,
+                              label: Text(l10n.custom),
+                              icon: const Icon(Icons.folder_open),
+                            ),
+                          ],
+                          selected: {_engineMode},
+                          onSelectionChanged: (Set<EngineMode> selected) {
+                            setState(() => _engineMode = selected.first);
+                            _markDirty();
+                          },
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    if (_engineMode == EngineMode.builtIn)
-                      _buildBuiltInStatus(context, l10n, colorScheme),
-                    if (_engineMode == EngineMode.custom)
-                      _buildCustomDylibPicker(context, l10n, colorScheme),
-                  ],
+                      const SizedBox(height: 12),
+                      if (_engineMode == EngineMode.builtIn)
+                        _buildBuiltInStatus(context, l10n, colorScheme),
+                      if (_engineMode == EngineMode.custom)
+                        _buildCustomDylibPicker(context, l10n, colorScheme),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
+            ],
 
             // ── Rendering section ──
             _SectionHeader(
