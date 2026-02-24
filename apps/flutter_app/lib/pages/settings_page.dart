@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../l10n/app_localizations.dart';
@@ -289,11 +290,18 @@ class _SettingsPageState extends State<SettingsPage> {
                         SizedBox(
                           width: double.infinity,
                           child: SegmentedButton<String>(
+                            showSelectedIcon: false,
                             segments: [
                               ButtonSegment<String>(
                                 value: 'opengl',
-                                label: Text(l10n.opengl),
-                                icon: const Icon(Icons.memory),
+                                label: SvgPicture.asset(
+                                  'assets/icons/opengl.svg',
+                                  height: 20,
+                                  colorFilter: ColorFilter.mode(
+                                    Theme.of(context).colorScheme.onSurface,
+                                    BlendMode.srcIn,
+                                  ),
+                                ),
                               ),
                               ButtonSegment<String>(
                                 value: 'software',
@@ -333,16 +341,29 @@ class _SettingsPageState extends State<SettingsPage> {
                           SizedBox(
                             width: double.infinity,
                             child: SegmentedButton<String>(
+                              showSelectedIcon: false,
                               segments: [
                                 ButtonSegment<String>(
                                   value: 'gles',
-                                  label: Text(l10n.opengles),
-                                  icon: const Icon(Icons.memory),
+                                  label: SvgPicture.asset(
+                                    'assets/icons/opengles.svg',
+                                    height: 20,
+                                    colorFilter: ColorFilter.mode(
+                                      Theme.of(context).colorScheme.onSurface,
+                                      BlendMode.srcIn,
+                                    ),
+                                  ),
                                 ),
                                 ButtonSegment<String>(
                                   value: 'vulkan',
-                                  label: Text(l10n.vulkan),
-                                  icon: const Icon(Icons.bolt),
+                                  label: SvgPicture.asset(
+                                    'assets/icons/vulkan.svg',
+                                    height: 20,
+                                    colorFilter: ColorFilter.mode(
+                                      Theme.of(context).colorScheme.onSurface,
+                                      BlendMode.srcIn,
+                                    ),
+                                  ),
                                 ),
                               ],
                               selected: {_angleBackend},
