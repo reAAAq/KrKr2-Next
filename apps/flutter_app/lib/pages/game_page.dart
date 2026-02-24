@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../engine/engine_bridge.dart';
 import '../engine/flutter_engine_bridge_adapter.dart';
+import '../constants/prefs_keys.dart';
 import '../widgets/engine_surface.dart';
 import '../widgets/performance_overlay.dart';
 
@@ -38,13 +39,6 @@ class _GamePageState extends State<GamePage>
   final GlobalKey<EngineSurfaceState> _surfaceKey =
       GlobalKey<EngineSurfaceState>();
 
-  static const String _perfOverlayKey = 'krkr2_perf_overlay';
-  static const String _fpsLimitEnabledKey = 'krkr2_fps_limit_enabled';
-  static const String _targetFpsKey = 'krkr2_target_fps';
-  static const String _rendererKey = 'krkr2_renderer';
-  static const String _angleBackendKey = 'krkr2_angle_backend';
-  static const int _defaultFps = 60;
-
   Ticker? _ticker;
   bool _tickInFlight = false;
   bool _isTicking = false;
@@ -57,7 +51,7 @@ class _GamePageState extends State<GamePage>
   bool _pendingLifecycleResumed = false;
 
   // Frame rate
-  int _targetFps = _defaultFps;
+  int _targetFps = PrefsKeys.defaultFps;
   bool _fpsLimitEnabled = false;
 
   // Performance overlay
@@ -256,15 +250,15 @@ class _GamePageState extends State<GamePage>
 
     // Set renderer pipeline (opengl / software) before opening the game
     final prefs = await SharedPreferences.getInstance();
-    final renderer = prefs.getString(_rendererKey) ?? 'opengl';
+    final renderer = prefs.getString(PrefsKeys.renderer) ?? PrefsKeys.rendererOpengl;
     _log('Setting renderer=$renderer');
-    await _bridge.engineSetOption(key: 'renderer', value: renderer);
+    await _bridge.engineSetOption(key: PrefsKeys.optionRenderer, value: renderer);
 
     // Set ANGLE backend (gles / vulkan) — Android only, others ignore
     if (Platform.isAndroid) {
-      final angleBackend = prefs.getString(_angleBackendKey) ?? 'gles';
+      final angleBackend = prefs.getString(PrefsKeys.angleBackend) ?? PrefsKeys.angleBackendGles;
       _log('Setting angle_backend=$angleBackend');
-      await _bridge.engineSetOption(key: 'angle_backend', value: angleBackend);
+      await _bridge.engineSetOption(key: PrefsKeys.optionAngleBackend, value: angleBackend);
     }
 
     if (!mounted) return;
@@ -482,10 +476,10 @@ class _GamePageState extends State<GamePage>
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
-      final fps = prefs.getInt(_targetFpsKey) ?? _defaultFps;
-      final fpsLimitEnabled = prefs.getBool(_fpsLimitEnabledKey) ?? false;
+      final fps = prefs.getInt(PrefsKeys.targetFps) ?? PrefsKeys.defaultFps;
+      final fpsLimitEnabled = prefs.getBool(PrefsKeys.fpsLimitEnabled) ?? false;
       setState(() {
-        _showPerfOverlay = prefs.getBool(_perfOverlayKey) ?? false;
+        _showPerfOverlay = prefs.getBool(PrefsKeys.perfOverlay) ?? false;
         _targetFps = fps;
         _fpsLimitEnabled = fpsLimitEnabled;
       });
@@ -499,7 +493,7 @@ class _GamePageState extends State<GamePage>
     final int fpsValue = _fpsLimitEnabled ? _targetFps : 0;
     _log('Setting fps_limit=$fpsValue (enabled=$_fpsLimitEnabled, target=$_targetFps)');
     await _bridge.engineSetOption(
-      key: 'fps_limit',
+      key: PrefsKeys.optionFpsLimit,
       value: fpsValue.toString(),
     );
   }

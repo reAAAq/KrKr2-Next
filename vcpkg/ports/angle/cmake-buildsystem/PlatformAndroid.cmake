@@ -30,9 +30,6 @@ if (USE_ANGLE_EGL OR ENABLE_WEBGL)
     list(APPEND ANGLE_DEFINITIONS
         ANGLE_ENABLE_OPENGL
     )
-
-    # Enable GLSL compiler output
-    list(APPEND ANGLE_DEFINITIONS ANGLE_ENABLE_GLSL)
 endif ()
 
 # Vulkan backend (optional, enabled via USE_VULKAN)
@@ -122,6 +119,12 @@ if (USE_VULKAN)
     )
 
     # Enable GLSL->SPIRV translator for Vulkan
+    # (ANGLE_ENABLE_GLSL is added once at the end of this file)
+endif ()
+
+# ANGLE_ENABLE_GLSL is needed by both the GL backend and the Vulkan
+# GLSL->SPIRV translator.  Define it once to satisfy either (or both).
+if (USE_ANGLE_EGL OR ENABLE_WEBGL OR USE_VULKAN)
     list(APPEND ANGLE_DEFINITIONS ANGLE_ENABLE_GLSL)
 endif ()
 

@@ -11,6 +11,7 @@ import '../models/game_info.dart';
 import '../services/game_manager.dart';
 import 'game_page.dart';
 import 'settings_page.dart';
+import '../constants/prefs_keys.dart';
 
 /// Engine loading mode: built-in (bundled in .app) or custom (user-specified).
 enum EngineMode { builtIn, custom }
@@ -24,16 +25,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  static const String _dylibPathKey = 'krkr2_dylib_path';
-  static const String _engineModeKey = 'krkr2_engine_mode';
-  static const String _perfOverlayKey = 'krkr2_perf_overlay';
-  static const String _fpsLimitEnabledKey = 'krkr2_fps_limit_enabled';
-  static const String _targetFpsKey = 'krkr2_target_fps';
-  static const String _rendererKey = 'krkr2_renderer';
-  static const String _angleBackendKey = 'krkr2_angle_backend';
-  static const List<int> _fpsOptions = [30, 60, 120];
-  static const int _defaultFps = 60;
-
   final GameManager _gameManager = GameManager();
   bool _loading = true;
   String? _iosGamesDir;
@@ -43,9 +34,9 @@ class _HomePageState extends State<HomePage> {
   bool _builtInAvailable = false;
   bool _perfOverlay = false;
   bool _fpsLimitEnabled = false;
-  int _targetFps = _defaultFps;
-  String _renderer = 'opengl';
-  String _angleBackend = 'gles';
+  int _targetFps = PrefsKeys.defaultFps;
+  String _renderer = PrefsKeys.rendererOpengl;
+  String _angleBackend = PrefsKeys.angleBackendGles;
 
   String? _resolveBuiltInDylibPath() {
     if (Platform.isIOS) {
@@ -84,17 +75,17 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadGames() async {
     final prefs = await SharedPreferences.getInstance();
-    final modeStr = prefs.getString(_engineModeKey);
-    _engineMode = modeStr == 'custom' ? EngineMode.custom : EngineMode.builtIn;
-    _customDylibPath = prefs.getString(_dylibPathKey);
+    final modeStr = prefs.getString(PrefsKeys.engineMode);
+    _engineMode = modeStr == PrefsKeys.engineModeCustom ? EngineMode.custom : EngineMode.builtIn;
+    _customDylibPath = prefs.getString(PrefsKeys.dylibPath);
     _builtInDylibPath = _resolveBuiltInDylibPath();
     _builtInAvailable = _builtInDylibPath != null;
-    _perfOverlay = prefs.getBool(_perfOverlayKey) ?? false;
-    _fpsLimitEnabled = prefs.getBool(_fpsLimitEnabledKey) ?? false;
-    _targetFps = prefs.getInt(_targetFpsKey) ?? _defaultFps;
-    if (!_fpsOptions.contains(_targetFps)) _targetFps = _defaultFps;
-    _renderer = prefs.getString(_rendererKey) ?? 'opengl';
-    _angleBackend = prefs.getString(_angleBackendKey) ?? 'gles';
+    _perfOverlay = prefs.getBool(PrefsKeys.perfOverlay) ?? false;
+    _fpsLimitEnabled = prefs.getBool(PrefsKeys.fpsLimitEnabled) ?? false;
+    _targetFps = prefs.getInt(PrefsKeys.targetFps) ?? PrefsKeys.defaultFps;
+    if (!PrefsKeys.fpsOptions.contains(_targetFps)) _targetFps = PrefsKeys.defaultFps;
+    _renderer = prefs.getString(PrefsKeys.renderer) ?? PrefsKeys.rendererOpengl;
+    _angleBackend = prefs.getString(PrefsKeys.angleBackend) ?? PrefsKeys.angleBackendGles;
     await _gameManager.load();
 
     if (Platform.isIOS) {

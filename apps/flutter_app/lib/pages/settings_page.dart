@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../l10n/app_localizations.dart';
 import '../main.dart';
+import '../constants/prefs_keys.dart';
 import 'home_page.dart';
 
 /// Standalone settings page with MD3 styling and i18n support.
@@ -59,24 +60,13 @@ class SettingsResult {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  static const String _dylibPathKey = 'krkr2_dylib_path';
-  static const String _engineModeKey = 'krkr2_engine_mode';
-  static const String _perfOverlayKey = 'krkr2_perf_overlay';
-  static const String _fpsLimitEnabledKey = 'krkr2_fps_limit_enabled';
-  static const String _targetFpsKey = 'krkr2_target_fps';
-  static const String _rendererKey = 'krkr2_renderer';
-  static const String _angleBackendKey = 'krkr2_angle_backend';
-  static const String _localeKey = 'krkr2_locale';
-  static const String _themeModeKey = 'krkr2_theme_mode';
-  static const List<int> _fpsOptions = [30, 60, 120];
-
   late EngineMode _engineMode;
   late String? _customDylibPath;
   late bool _perfOverlay;
   late bool _fpsLimitEnabled;
   late int _targetFps;
   late String _renderer;
-  String _angleBackend = 'gles';
+  String _angleBackend = PrefsKeys.angleBackendGles;
   String _localeCode = 'system';
   String _themeModeCode = 'dark';
   bool _dirty = false;
@@ -99,7 +89,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
       setState(() {
-        _localeCode = prefs.getString(_localeKey) ?? 'system';
+        _localeCode = prefs.getString(PrefsKeys.locale) ?? 'system';
       });
     }
   }
@@ -108,7 +98,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
       setState(() {
-        _themeModeCode = prefs.getString(_themeModeKey) ?? 'dark';
+        _themeModeCode = prefs.getString(PrefsKeys.themeMode) ?? 'dark';
       });
     }
   }
@@ -116,19 +106,19 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
-      _engineModeKey,
-      _engineMode == EngineMode.custom ? 'custom' : 'builtIn',
+      PrefsKeys.engineMode,
+      _engineMode == EngineMode.custom ? PrefsKeys.engineModeCustom : PrefsKeys.engineModeBuiltIn,
     );
     if (_customDylibPath != null) {
-      await prefs.setString(_dylibPathKey, _customDylibPath!);
+      await prefs.setString(PrefsKeys.dylibPath, _customDylibPath!);
     } else {
-      await prefs.remove(_dylibPathKey);
+      await prefs.remove(PrefsKeys.dylibPath);
     }
-    await prefs.setBool(_perfOverlayKey, _perfOverlay);
-    await prefs.setBool(_fpsLimitEnabledKey, _fpsLimitEnabled);
-    await prefs.setInt(_targetFpsKey, _targetFps);
-    await prefs.setString(_rendererKey, _renderer);
-    await prefs.setString(_angleBackendKey, _angleBackend);
+    await prefs.setBool(PrefsKeys.perfOverlay, _perfOverlay);
+    await prefs.setBool(PrefsKeys.fpsLimitEnabled, _fpsLimitEnabled);
+    await prefs.setInt(PrefsKeys.targetFps, _targetFps);
+    await prefs.setString(PrefsKeys.renderer, _renderer);
+    await prefs.setString(PrefsKeys.angleBackend, _angleBackend);
 
     if (mounted) {
       Navigator.pop(
@@ -152,7 +142,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _changeLocale(String code) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_localeKey, code);
+    await prefs.setString(PrefsKeys.locale, code);
     if (!mounted) return;
     setState(() => _localeCode = code);
 
@@ -166,7 +156,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _changeThemeMode(String code) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_themeModeKey, code);
+    await prefs.setString(PrefsKeys.themeMode, code);
     if (!mounted) return;
     setState(() => _themeModeCode = code);
 
@@ -394,7 +384,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       subtitle: Text(l10n.targetFrameRateDesc),
                       trailing: DropdownButton<int>(
                         value: _targetFps,
-                        items: _fpsOptions
+                        items: PrefsKeys.fpsOptions
                             .map((fps) => DropdownMenuItem<int>(
                                   value: fps,
                                   child: Text(l10n.fpsLabel(fps)),

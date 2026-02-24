@@ -1,0 +1,37 @@
+/// Centralized SharedPreferences keys and engine option constants.
+///
+/// All pages (home_page, settings_page, game_page) should reference
+/// these constants instead of defining their own copies.
+class PrefsKeys {
+  PrefsKeys._(); // Prevent instantiation
+
+  // ── SharedPreferences keys ──────────────────────────────────────
+  static const String dylibPath = 'krkr2_dylib_path';
+  static const String engineMode = 'krkr2_engine_mode';
+  static const String perfOverlay = 'krkr2_perf_overlay';
+  static const String fpsLimitEnabled = 'krkr2_fps_limit_enabled';
+  static const String targetFps = 'krkr2_target_fps';
+  static const String renderer = 'krkr2_renderer';
+  static const String angleBackend = 'krkr2_angle_backend';
+  static const String locale = 'krkr2_locale';
+  static const String themeMode = 'krkr2_theme_mode';
+
+  // ── Engine option keys (must match C++ ENGINE_OPTION_* constants) ─
+  static const String optionAngleBackend = 'angle_backend';
+  static const String optionFpsLimit = 'fps_limit';
+  static const String optionRenderer = 'renderer';
+
+  // ── Engine option values ────────────────────────────────────────
+  static const String angleBackendGles = 'gles';
+  static const String angleBackendVulkan = 'vulkan';
+  static const String rendererOpengl = 'opengl';
+  static const String rendererSoftware = 'software';
+
+  // ── Engine mode values ──────────────────────────────────────────
+  static const String engineModeBuiltIn = 'builtIn';
+  static const String engineModeCustom = 'custom';
+
+  // ── Default values ──────────────────────────────────────────────
+  static const int defaultFps = 60;
+  static const List<int> fpsOptions = [30, 60, 120];
+}
