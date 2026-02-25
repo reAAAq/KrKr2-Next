@@ -10,7 +10,7 @@ class GameInfo {
   });
 
   /// The root directory of the game.
-  final String path;
+  String path;
 
   /// Display title. Falls back to the directory name if null.
   String? title;

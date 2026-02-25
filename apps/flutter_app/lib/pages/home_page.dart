@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -118,21 +119,46 @@ class _HomePageState extends State<HomePage> {
     final gamesDir = Directory(_iosGamesDir!);
     if (!await gamesDir.exists()) return;
 
-    final existingPaths = _gameManager.games.map((g) => g.path).toSet();
+    // Remove stale entries whose directories no longer exist on disk
+    // (handles iOS sandbox UUID changes leaving orphaned entries).
+    final stale = <String>[];
+    for (final g in _gameManager.games) {
+      if (!await Directory(g.path).exists()) {
+        stale.add(g.path);
+      }
+    }
+    for (final path in stale) {
+      await _gameManager.removeGame(path);
+    }
+
+    final existingByName = <String, GameInfo>{};
+    for (final g in _gameManager.games) {
+      existingByName[p.basename(g.path)] = g;
+    }
+
     final entries = await gamesDir.list().toList();
-    final scannedPaths = <String>{};
+    final scannedNames = <String>{};
     for (final entry in entries) {
       if (entry is Directory) {
-        scannedPaths.add(entry.path);
-        if (!existingPaths.contains(entry.path)) {
+        final name = p.basename(entry.path);
+        scannedNames.add(name);
+        final existing = existingByName[name];
+        if (existing != null) {
+          if (existing.path != entry.path) {
+            await _gameManager.updateGamePath(existing.path, entry.path);
+          }
+        } else {
           final game = GameInfo(path: entry.path);
           await _gameManager.addGame(game);
         }
       }
     }
 
-    final toRemove = existingPaths
-        .where((p) => p.startsWith(_iosGamesDir!) && !scannedPaths.contains(p))
+    final toRemove = _gameManager.games
+        .where((g) =>
+            g.path.startsWith(_iosGamesDir!) &&
+            !scannedNames.contains(p.basename(g.path)))
+        .map((g) => g.path)
         .toList();
     for (final path in toRemove) {
       await _gameManager.removeGame(path);

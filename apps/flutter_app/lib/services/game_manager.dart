@@ -60,6 +60,15 @@ class GameManager {
     }
   }
 
+  /// Update a game's path (e.g. when iOS sandbox container UUID changes).
+  Future<void> updateGamePath(String oldPath, String newPath) async {
+    final index = _games.indexWhere((g) => g.path == oldPath);
+    if (index >= 0) {
+      _games[index].path = newPath;
+      await _save();
+    }
+  }
+
   /// Set a custom cover image path for a game.
   Future<void> setCoverImage(String path, String? coverPath) async {
     final index = _games.indexWhere((g) => g.path == path);
