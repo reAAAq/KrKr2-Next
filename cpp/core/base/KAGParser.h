@@ -168,6 +168,7 @@ private:
     iTJSDispatch2 *DicObj; // DictionaryObject
 
     iTJSDispatch2 *Macros; // Macro Dictionary Object
+    iTJSDispatch2 *ParamMacros; // Parameter Macro Dictionary Object
 
     std::vector<iTJSDispatch2 *> MacroArgs; // Macro arguments
     tjs_uint MacroArgStackDepth;
@@ -239,7 +240,22 @@ private:
     std::vector<tjs_int> ExcludeLevelStack;
     std::vector<bool> IfLevelExecutedStack;
 
+    struct tWhileStackData {
+        tjs_int Line;
+        tjs_int Pos;
+        tjs_int PrevExcludeLevel;
+        tjs_int IfLevel;
+        ttstr Exp;
+        ttstr Each;
+        tWhileStackData(tjs_int line, tjs_int pos, tjs_int prevExcludeLevel,
+                        tjs_int ifLevel, const ttstr &exp, const ttstr &each) :
+            Line(line), Pos(pos), PrevExcludeLevel(prevExcludeLevel),
+            IfLevel(ifLevel), Exp(exp), Each(each) {}
+    };
+    std::vector<tWhileStackData> WhileStack;
+
     bool Interrupted;
+    bool MultiLineTagEnabled;
 
 public:
     void operator=(const tTJSNI_KAGParser &ref);
@@ -305,6 +321,10 @@ public:
     void ResetInterrupt() { Interrupted = false; };
 
 private:
+    bool EntryParam(bool &condition, const ttstr &attribname, const ttstr &value,
+                    bool entity, bool macroarg, bool allowParamMacro);
+
+private:
     iTJSDispatch2 *_GetNextTag();
 
 public:
@@ -331,6 +351,7 @@ public:
     tTVPKAGDebugLevel GetDebugLevel() const { return DebugLevel; }
 
     iTJSDispatch2 *GetMacrosNoAddRef() const { return Macros; }
+    iTJSDispatch2 *GetParamMacrosNoAddRef() const { return ParamMacros; }
 
     iTJSDispatch2 *GetMacroTopNoAddRef() const;
     // get current macro argument (parameters)
@@ -338,6 +359,9 @@ public:
     tjs_int GetCallStackDepth() const { return CallStack.size(); }
 
     void Assign(const tTJSNI_KAGParser &ref) { operator=(ref); }
+
+    void SetMultiLineTagEnabled(bool b) { MultiLineTagEnabled = b; }
+    bool GetMultiLineTagEnabled() const { return MultiLineTagEnabled; }
 };
 
 extern iTJSDispatch2 *TVPCreateNativeClass_KAGParser();

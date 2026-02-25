@@ -53,6 +53,7 @@ add_subdirectory(psdfile)
 add_subdirectory(psbfile)
 add_subdirectory(layerex_draw)
 add_subdirectory(motionplayer)
+add_subdirectory(kagparserex)
 
 #add_subdirectory(json)
 add_subdirectory(fstat)
@@ -63,6 +64,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
         psbfile
         layerExDraw
         motionplayer
+        kagparserex
         fstat
 #        json steam DrawDeviceForSteam
 )
