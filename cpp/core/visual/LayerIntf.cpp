@@ -7596,6 +7596,10 @@ void tTJSNI_BaseLayer::StartTransition(const ttstr &name, bool withchildren,
         InTransition = true;
         TransCompEventPrevented = false;
 
+        spdlog::trace("[TransTrace] StartTransition name={} type={} updateType={} withChildren={} hasSrc={}",
+            name.AsNarrowStdString(), (int)TransType, (int)TransUpdateType,
+            withchildren, transsource != nullptr);
+
         // update
         Update(true);
     } catch(...) {
@@ -7617,6 +7621,7 @@ void tTJSNI_BaseLayer::StartTransition(const ttstr &name, bool withchildren,
 void tTJSNI_BaseLayer::InternalStopTransition() {
     // stop transition
     if(InTransition) {
+        spdlog::trace("[TransTrace] StopTransition type={}", (int)TransType);
         InTransition = false;
         TransCompEventPrevented = false;
 
