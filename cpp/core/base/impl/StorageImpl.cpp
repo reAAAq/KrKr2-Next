@@ -12,8 +12,10 @@
 
 // must before with Platform.h because marco will replece `st_atime` symbol!
 #include <fcntl.h>
+#include <cstring>
 #include <filesystem>
 #include <sys/stat.h>
+#include <vector>
 #include "MsgIntf.h"
 
 #include "StorageImpl.h"
@@ -33,6 +35,10 @@
 #include "combase.h"
 
 #include "spdlog/spdlog.h"
+
+#if defined(__APPLE__)
+#include <CoreFoundation/CoreFoundation.h>
+#endif
 
 #ifdef WIN32
 #include <io.h>
@@ -89,6 +95,28 @@ public:
     void GetLocalName(ttstr &name);
 };
 
+#if defined(__APPLE__)
+static void _tjs_normalize_nfc(ttstr &name) {
+    if(name.IsEmpty())
+        return;
+    CFMutableStringRef str = CFStringCreateMutable(kCFAllocatorDefault, 0);
+    if(!str)
+        return;
+    CFStringAppendCharacters(str, reinterpret_cast<const UniChar *>(name.c_str()),
+                             static_cast<CFIndex>(name.GetLen()));
+    CFStringNormalize(str, kCFStringNormalizationFormC);
+    const CFIndex len = CFStringGetLength(str);
+    std::vector<UniChar> buf(static_cast<size_t>(len));
+    if(len > 0) {
+        CFStringGetCharacters(str, CFRangeMake(0, len), buf.data());
+        name = ttstr(reinterpret_cast<const tjs_char *>(buf.data()), len);
+    } else {
+        name.Clear();
+    }
+    CFRelease(str);
+}
+#endif
+
 //---------------------------------------------------------------------------
 void tTVPFileMedia::NormalizeDomainName(ttstr &name) {
     // normalize domain name
@@ -111,6 +139,9 @@ void tTVPFileMedia::NormalizePathName(ttstr &name) {
             *p += TJS_W('a') - TJS_W('A');
         p++;
     }
+#if defined(__APPLE__)
+    _tjs_normalize_nfc(name);
+#endif
 }
 
 //---------------------------------------------------------------------------
@@ -228,6 +259,9 @@ void TVPGetLocalFileListAt(
                     *p += TJS_W('a') - TJS_W('A');
                 p++;
             }
+#if defined(__APPLE__)
+            _tjs_normalize_nfc(file);
+#endif
             tTVPLocalFileInfo info;
             info.NativeName = direntp->d_name;
             info.Mode = stat_buf.st_mode;
@@ -266,6 +300,25 @@ static int _utf8_strcasecmp(const char *a, const char *b) {
     }
     return *a - *b;
 }
+
+#if defined(__APPLE__)
+static int _utf8_strcasecmp_nfc(const char *a, const char *b) {
+    CFStringRef sa = CFStringCreateWithCString(kCFAllocatorDefault, a,
+                                               kCFStringEncodingUTF8);
+    CFStringRef sb = CFStringCreateWithCString(kCFAllocatorDefault, b,
+                                               kCFStringEncodingUTF8);
+    if(!sa || !sb) {
+        if(sa) CFRelease(sa);
+        if(sb) CFRelease(sb);
+        return _utf8_strcasecmp(a, b);
+    }
+    CFComparisonResult res = CFStringCompare(sa, sb,
+        kCFCompareCaseInsensitive | kCFCompareNonliteral);
+    CFRelease(sa);
+    CFRelease(sb);
+    return (int)res;
+}
+#endif
 
 #if CC_TARGET_PLATFORM == CC_PLATFORM_IOS
 const std::vector<std::string> &TVPGetApplicationHomeDirectory();
@@ -397,7 +450,11 @@ void tTVPFileMedia::GetLocallyAccessibleName(ttstr &name) {
         if((dirp = opendir(tTJSNarrowStringHolder(newname.c_str())))) {
             bool found = false;
             while((direntp = readdir(dirp)) != nullptr) {
+#if defined(__APPLE__)
+                if(!_utf8_strcasecmp_nfc(walker, direntp->d_name)) {
+#else
                 if(!_utf8_strcasecmp(walker, direntp->d_name)) {
+#endif
                     newname += direntp->d_name;
                     found = true;
                     break;
