@@ -105,5 +105,13 @@
   "justNow": "刚刚",
   "minutesAgo": "{count} 分钟前",
   "hoursAgo": "{count} 小时前",
-  "daysAgo": "{count} 天前"
+  "daysAgo": "{count} 天前",
+
+  "packXp3": "打包为 XP3",
+  "unpackXp3": "解包 XP3",
+  "packingProgress": "正在打包...",
+  "unpackingProgress": "正在解包...",
+  "packComplete": "打包完成",
+  "unpackComplete": "解包完成",
+  "xp3OperationFailed": "操作失败：{error}"
 }

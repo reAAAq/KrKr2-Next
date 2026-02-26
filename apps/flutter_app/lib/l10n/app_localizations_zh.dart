@@ -295,4 +295,27 @@ class AppLocalizationsZh extends AppLocalizations {
   String daysAgo(int count) {
     return '$count 天前';
   }
+
+  @override
+  String get packXp3 => '打包为 XP3';
+
+  @override
+  String get unpackXp3 => '解包 XP3';
+
+  @override
+  String get packingProgress => '正在打包...';
+
+  @override
+  String get unpackingProgress => '正在解包...';
+
+  @override
+  String get packComplete => '打包完成';
+
+  @override
+  String get unpackComplete => '解包完成';
+
+  @override
+  String xp3OperationFailed(String error) {
+    return '操作失败：$error';
+  }
 }

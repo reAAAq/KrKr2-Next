@@ -645,6 +645,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} days ago'**
   String daysAgo(int count);
+
+  /// No description provided for @packXp3.
+  ///
+  /// In en, this message translates to:
+  /// **'Pack as XP3'**
+  String get packXp3;
+
+  /// No description provided for @unpackXp3.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpack XP3'**
+  String get unpackXp3;
+
+  /// No description provided for @packingProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Packing...'**
+  String get packingProgress;
+
+  /// No description provided for @unpackingProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpacking...'**
+  String get unpackingProgress;
+
+  /// No description provided for @packComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Packed successfully'**
+  String get packComplete;
+
+  /// No description provided for @unpackComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpacked successfully'**
+  String get unpackComplete;
+
+  /// No description provided for @xp3OperationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Operation failed: {error}'**
+  String xp3OperationFailed(String error);
 }
 
 class _AppLocalizationsDelegate

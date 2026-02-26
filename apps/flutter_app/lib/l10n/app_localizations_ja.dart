@@ -297,4 +297,27 @@ class AppLocalizationsJa extends AppLocalizations {
   String daysAgo(int count) {
     return '$count日前';
   }
+
+  @override
+  String get packXp3 => 'XP3にパック';
+
+  @override
+  String get unpackXp3 => 'XP3を展開';
+
+  @override
+  String get packingProgress => 'パック中...';
+
+  @override
+  String get unpackingProgress => '展開中...';
+
+  @override
+  String get packComplete => 'パック完了';
+
+  @override
+  String get unpackComplete => '展開完了';
+
+  @override
+  String xp3OperationFailed(String error) {
+    return '操作失敗：$error';
+  }
 }

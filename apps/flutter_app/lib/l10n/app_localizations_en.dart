@@ -305,4 +305,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String daysAgo(int count) {
     return '$count days ago';
   }
+
+  @override
+  String get packXp3 => 'Pack as XP3';
+
+  @override
+  String get unpackXp3 => 'Unpack XP3';
+
+  @override
+  String get packingProgress => 'Packing...';
+
+  @override
+  String get unpackingProgress => 'Unpacking...';
+
+  @override
+  String get packComplete => 'Packed successfully';
+
+  @override
+  String get unpackComplete => 'Unpacked successfully';
+
+  @override
+  String xp3OperationFailed(String error) {
+    return 'Operation failed: $error';
+  }
 }

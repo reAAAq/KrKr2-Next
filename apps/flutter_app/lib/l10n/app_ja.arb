@@ -105,5 +105,13 @@
   "justNow": "たった今",
   "minutesAgo": "{count}分前",
   "hoursAgo": "{count}時間前",
-  "daysAgo": "{count}日前"
+  "daysAgo": "{count}日前",
+
+  "packXp3": "XP3にパック",
+  "unpackXp3": "XP3を展開",
+  "packingProgress": "パック中...",
+  "unpackingProgress": "展開中...",
+  "packComplete": "パック完了",
+  "unpackComplete": "展開完了",
+  "xp3OperationFailed": "操作失敗：{error}"
 }

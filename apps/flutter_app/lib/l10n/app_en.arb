@@ -140,5 +140,18 @@
     "placeholders": {
       "count": { "type": "int" }
     }
+  },
+
+  "packXp3": "Pack as XP3",
+  "unpackXp3": "Unpack XP3",
+  "packingProgress": "Packing...",
+  "unpackingProgress": "Unpacking...",
+  "packComplete": "Packed successfully",
+  "unpackComplete": "Unpacked successfully",
+  "xp3OperationFailed": "Operation failed: {error}",
+  "@xp3OperationFailed": {
+    "placeholders": {
+      "error": { "type": "String" }
+    }
   }
 }

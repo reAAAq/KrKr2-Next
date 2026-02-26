@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../l10n/app_localizations.dart';
 import '../models/game_info.dart';
 import '../services/game_manager.dart';
+import '../utils/xp3_utils.dart';
 import 'game_page.dart';
 import 'settings_page.dart';
 import '../constants/prefs_keys.dart';
@@ -513,6 +514,113 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<void> _packUnpackGame(GameInfo game) async {
+    final l10n = AppLocalizations.of(context)!;
+    final isXp3 = game.path.toLowerCase().endsWith('.xp3');
+
+    final progress = ValueNotifier<double>(0.0);
+    final currentFile = ValueNotifier<String>('');
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          title: Text(isXp3 ? l10n.unpackingProgress : l10n.packingProgress),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ValueListenableBuilder<double>(
+                valueListenable: progress,
+                builder: (_, value, _) =>
+                    LinearProgressIndicator(value: value),
+              ),
+              const SizedBox(height: 12),
+              ValueListenableBuilder<String>(
+                valueListenable: currentFile,
+                builder: (_, value, _) => Text(
+                  value,
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      if (isXp3) {
+        final destDir = p.join(
+          p.dirname(game.path),
+          p.basenameWithoutExtension(game.path),
+        );
+        await xp3Extract(
+          game.path,
+          destDir,
+          onProgress: (p, f) {
+            progress.value = p;
+            currentFile.value = f;
+          },
+        );
+        if (mounted) {
+          Navigator.of(context).pop();
+          final newGame = GameInfo(path: destDir);
+          final added = await _gameManager.addGame(newGame);
+          if (added && mounted) setState(() {});
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(l10n.unpackComplete),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      } else {
+        final xp3Path = '${game.path}.xp3';
+        await xp3Pack(
+          game.path,
+          xp3Path,
+          onProgress: (p, f) {
+            progress.value = p;
+            currentFile.value = f;
+          },
+        );
+        if (mounted) {
+          Navigator.of(context).pop();
+          final newGame = GameInfo(path: xp3Path);
+          final added = await _gameManager.addGame(newGame);
+          if (added && mounted) setState(() {});
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(l10n.packComplete),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.xp3OperationFailed(e.toString())),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      progress.dispose();
+      currentFile.dispose();
+    }
+  }
+
   Future<void> _openSettings() async {
     final result = await Navigator.of(context).push<SettingsResult>(
       MaterialPageRoute<SettingsResult>(
@@ -677,6 +785,7 @@ class _HomePageState extends State<HomePage> {
                 onRename: () => _renameGame(game),
                 onRemove: () => _removeGame(game),
                 onSetCover: () => _setCoverImage(game),
+                onPackUnpack: () => _packUnpackGame(game),
               );
             },
           ),
@@ -694,6 +803,7 @@ class _GameCard extends StatelessWidget {
     required this.onRename,
     required this.onRemove,
     required this.onSetCover,
+    required this.onPackUnpack,
   });
 
   final GameInfo game;
@@ -702,6 +812,9 @@ class _GameCard extends StatelessWidget {
   final VoidCallback onRename;
   final VoidCallback onRemove;
   final VoidCallback onSetCover;
+  final VoidCallback onPackUnpack;
+
+  bool get _isXp3 => game.path.toLowerCase().endsWith('.xp3');
 
   @override
   Widget build(BuildContext context) {
@@ -774,6 +887,9 @@ class _GameCard extends StatelessWidget {
                     case 'rename':
                       onRename();
                       break;
+                    case 'pack_unpack':
+                      onPackUnpack();
+                      break;
                     case 'remove':
                       onRemove();
                       break;
@@ -794,6 +910,19 @@ class _GameCard extends StatelessWidget {
                     child: ListTile(
                       leading: const Icon(Icons.edit),
                       title: Text(l10n.rename),
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'pack_unpack',
+                    child: ListTile(
+                      leading: Icon(_isXp3
+                          ? Icons.unarchive
+                          : Icons.archive),
+                      title: Text(_isXp3
+                          ? l10n.unpackXp3
+                          : l10n.packXp3),
                       contentPadding: EdgeInsets.zero,
                       dense: true,
                     ),
