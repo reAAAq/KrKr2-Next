@@ -63,10 +63,28 @@ void LocaleConfigManager::Initialize(const std::string &sysLang) {
         currentLangCode = sysLang;
     AllConfig.clear();
     AllConfig.reserve(128);
+
+    // Built-in English defaults so that UI text is readable even when
+    // the locale XML file is missing.
+    AllConfig["msgbox_ok"]            = "OK";
+    AllConfig["msgbox_yes"]           = "Yes";
+    AllConfig["msgbox_no"]            = "No";
+    AllConfig["cancel"]               = "Cancel";
+    AllConfig["retry"]                = "Retry";
+    AllConfig["err_no_memory"]        = "Insufficient memory";
+    AllConfig["err_occured"]          = "Error";
+    AllConfig["crash_report"]         = "Crash Report";
+    AllConfig["crash_report_msg"]     = "An unexpected error has occurred. Would you like to send a crash report?";
+    AllConfig["startup_patch_fail"]   = "Failed to apply startup patch.";
+    AllConfig["browse_patch_lib"]     = "Browse Patch Library";
+    AllConfig["use_internal_path"]    = "Use Internal Path";
+    AllConfig["continue_run"]         = "Continue";
+    AllConfig["readonly_storage"]     = "Read-only Storage";
+
     tinyxml2::XMLDocument doc;
     const std::string filePath = GetFilePath();
     if (filePath.empty()) {
-        // Keep map empty and fall back to key-as-text in GetText().
+        // No locale file found; use built-in defaults above.
         return;
     }
     std::string xmlData = ReadFileToString(filePath);
