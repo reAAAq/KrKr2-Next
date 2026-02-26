@@ -176,6 +176,47 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
+    const sheetRadius = BorderRadius.vertical(top: Radius.circular(16));
+    final source = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Material(
+        color: Theme.of(ctx).colorScheme.surface,
+        borderRadius: sheetRadius,
+        clipBehavior: Clip.antiAlias,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.folder_open),
+                  title: Text(l10n.selectGameDirectory),
+                  onTap: () => Navigator.pop(ctx, 'directory'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.archive),
+                  title: Text(l10n.selectGameArchive),
+                  onTap: () => Navigator.pop(ctx, 'xp3'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    if (source == 'directory') {
+      await _addGameDirectory();
+    } else {
+      await _addGameArchive();
+    }
+  }
+
+  Future<void> _addGameDirectory() async {
+    final l10n = AppLocalizations.of(context)!;
     final String? selectedDirectory =
         await FilePicker.platform.getDirectoryPath(
       dialogTitle: l10n.selectGameDirectory,
@@ -200,16 +241,37 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _addGameArchive() async {
     final l10n = AppLocalizations.of(context)!;
+    // Android's SAF doesn't recognise the .xp3 MIME type, so
+    // FileType.custom silently fails. Use FileType.any on Android
+    // and filter by extension afterwards.
     final result = await FilePicker.platform.pickFiles(
       dialogTitle: l10n.selectGameArchive,
-      type: FileType.custom,
-      allowedExtensions: ['xp3', 'XP3'],
-      allowMultiple: true,
+      type: Platform.isAndroid ? FileType.any : FileType.custom,
+      allowedExtensions: Platform.isAndroid ? null : ['xp3', 'XP3'],
+      allowMultiple: !Platform.isAndroid,
     );
     if (result == null || result.files.isEmpty || !mounted) return;
 
+    final xp3Files = result.files.where((f) {
+      final path = f.path;
+      if (path == null) return false;
+      return path.toLowerCase().endsWith('.xp3');
+    }).toList();
+
+    if (xp3Files.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.selectGameArchive),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
     int addedCount = 0;
-    for (final file in result.files) {
+    for (final file in xp3Files) {
       final filePath = file.path;
       if (filePath == null) continue;
       final game = GameInfo(path: filePath);
@@ -224,7 +286,7 @@ class _HomePageState extends State<HomePage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(l10n.gameAlreadyExists(
-                result.files.first.name)),
+                xp3Files.first.name)),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -547,23 +609,10 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             )
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FloatingActionButton.extended(
-                  heroTag: 'addDir',
-                  onPressed: _addGame,
-                  icon: const Icon(Icons.folder_open),
-                  label: Text(l10n.addGame),
-                ),
-                const SizedBox(width: 12),
-                FloatingActionButton.extended(
-                  heroTag: 'addXp3',
-                  onPressed: _addGameArchive,
-                  icon: const Icon(Icons.archive),
-                  label: Text(l10n.addArchive),
-                ),
-              ],
+          : FloatingActionButton.extended(
+              onPressed: _addGame,
+              icon: const Icon(Icons.add),
+              label: Text(l10n.addGame),
             ),
     );
   }
