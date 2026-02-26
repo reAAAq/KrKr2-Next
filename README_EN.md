@@ -50,7 +50,7 @@ The screenshot below shows the current running state on macOS with the Metal bac
 | Flutter Debug UI | ✅ Mostly Done | FPS control, engine lifecycle management, rendering status monitor |
 | Input Event Forwarding | ✅ Mostly Done | Mouse / touch event coordinate mapping and forwarding to the engine |
 | Engine Performance Optimization | 🔨 In Progress | SIMD pixel blending, GPU compositing pipeline, VM interpreter optimization, etc. |
-| Game Compatibility | 🔨 In Progress | Completing the script parser, adding plugins (KAG parser fixes, window property stubs, message box implementation, etc.). Current goal: match compatibility with Z's closed-source build |
+| Game Compatibility | 🔨 In Progress | Completing the script parser, adding plugins. Current goal: match compatibility with Z's closed-source build |
 | Original krkr2 Emulator Feature Porting | 📋 Planned | Gradually port original krkr2 emulator features to the new architecture |
 
 ## Platform Support
@@ -70,12 +70,6 @@ The screenshot below shows the current running state on macOS with the Metal bac
 | P0 | Pixel Blend SIMD ([Highway](https://github.com/google/highway)) | ✅ Done |
 | P0 | Full GPU Compositing Pipeline | 🔨 In Progress |
 | P0 | TJS2 VM Interpreter (computed goto) | 📋 Planned |
-| P1 | Event System Refactor (lock-free queue) | 📋 Planned |
-| P1 | Image Loading Thread Pool | 📋 Planned |
-| P1 | tTJSVariant Fast Path | 📋 Planned |
-| P2 | RefCount → Smart Pointers | 📋 Planned |
-| P2 | Custom Containers → Modern | 📋 Planned |
-| P2 | XP3 Archive zstd Support | 📋 Planned |
 
 ## License
 
