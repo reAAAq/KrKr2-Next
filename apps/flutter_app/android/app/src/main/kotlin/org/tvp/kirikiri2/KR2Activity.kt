@@ -4,8 +4,13 @@ import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.widget.EditText
+import android.widget.FrameLayout
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.flutter.embedding.android.FlutterActivity
 import java.io.File
 import java.util.Locale
@@ -158,18 +163,85 @@ open class KR2Activity : FlutterActivity() {
             Log.d(TAG, "MessageController ignored: $adType $arg1 $arg2")
         }
 
+        private val uiHandler = Handler(Looper.getMainLooper())
+
         @JvmStatic
         fun ShowMessageBox(title: String, message: String, buttons: Array<String>) {
-            Log.w(TAG, "ShowMessageBox stub: $title / $message")
-            // Default to first button to avoid blocking native thread.
-            nativeOnMessageBoxResult(0)
+            val ctx = instance ?: run {
+                Log.w(TAG, "ShowMessageBox: no activity, auto-confirming")
+                nativeOnMessageBoxResult(0)
+                return
+            }
+            uiHandler.post {
+                try {
+                    val builder = MaterialAlertDialogBuilder(ctx)
+                        .setTitle(title)
+                        .setMessage(message)
+                        .setCancelable(false)
+                    if (buttons.isNotEmpty()) {
+                        builder.setPositiveButton(buttons[0]) { _, _ -> nativeOnMessageBoxResult(0) }
+                    }
+                    if (buttons.size >= 2) {
+                        builder.setNeutralButton(buttons[1]) { _, _ -> nativeOnMessageBoxResult(1) }
+                    }
+                    if (buttons.size >= 3) {
+                        builder.setNegativeButton(buttons[2]) { _, _ -> nativeOnMessageBoxResult(2) }
+                    }
+                    builder.show()
+                } catch (e: Exception) {
+                    Log.e(TAG, "ShowMessageBox failed", e)
+                    nativeOnMessageBoxResult(0)
+                }
+            }
         }
 
         @JvmStatic
         fun ShowInputBox(title: String, prompt: String, initText: String, buttons: Array<String>) {
-            Log.w(TAG, "ShowInputBox stub: $title / $prompt")
-            // Return the initial text and first button by default.
-            nativeOnInputBoxResult(0, initText)
+            val ctx = instance ?: run {
+                Log.w(TAG, "ShowInputBox: no activity, auto-confirming")
+                nativeOnInputBoxResult(0, initText)
+                return
+            }
+            uiHandler.post {
+                try {
+                    val dp24 = (24 * ctx.resources.displayMetrics.density).toInt()
+                    val container = FrameLayout(ctx).apply {
+                        setPadding(dp24, 0, dp24, 0)
+                    }
+                    val editText = EditText(ctx).apply {
+                        setText(initText)
+                    }
+                    container.addView(editText, FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                    ))
+                    val builder = MaterialAlertDialogBuilder(ctx)
+                        .setTitle(title)
+                        .setMessage(prompt)
+                        .setView(container)
+                        .setCancelable(false)
+                    if (buttons.isNotEmpty()) {
+                        builder.setPositiveButton(buttons[0]) { _, _ ->
+                            nativeOnInputBoxResult(0, editText.text.toString())
+                        }
+                    }
+                    if (buttons.size >= 2) {
+                        builder.setNeutralButton(buttons[1]) { _, _ ->
+                            nativeOnInputBoxResult(1, editText.text.toString())
+                        }
+                    }
+                    if (buttons.size >= 3) {
+                        builder.setNegativeButton(buttons[2]) { _, _ ->
+                            nativeOnInputBoxResult(2, editText.text.toString())
+                        }
+                    }
+                    builder.show()
+                    editText.requestFocus()
+                } catch (e: Exception) {
+                    Log.e(TAG, "ShowInputBox failed", e)
+                    nativeOnInputBoxResult(0, initText)
+                }
+            }
         }
 
         @JvmStatic
