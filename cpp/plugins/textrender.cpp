@@ -8,7 +8,7 @@
  */
 
 #include "ncbind.hpp"
-#include "FontRasterizer.h"
+#include "FreeTypeFontRasterizer.h"
 #include "tvpfontstruc.h"
 
 #include <optional>
@@ -16,8 +16,6 @@
 #include <vector>
 
 #define NCB_MODULE_NAME TJS_W("textrender.dll")
-
-extern FontRasterizer *GetCurrentRasterizer();
 
 using tjs_ustring = std::basic_string<tjs_char>;
 using RgbColor = uint32_t;
@@ -210,8 +208,13 @@ struct CharacterInfo {
 
 class TextRenderBase {
 public:
-  TextRenderBase() {}
-  virtual ~TextRenderBase() {}
+  TextRenderBase() : m_rasterizer(new FreeTypeFontRasterizer()) {}
+  virtual ~TextRenderBase() {
+    if (m_rasterizer) {
+      m_rasterizer->Release();
+      m_rasterizer = nullptr;
+    }
+  }
 
   bool render(tTJSString text, int autoIndent, int diff, int all, bool same);
   void setRenderSize(int width, int height);
@@ -259,6 +262,10 @@ public:
   void set_fontScale(double v) { m_fontScale = v; }
 
 private:
+  FontRasterizer *m_rasterizer;
+  int m_cachedAscentHeight = 0;
+  bool m_fontDirty = true;
+
   int m_boxWidth = 0;
   int m_boxHeight = 0;
   int m_x = 0;
@@ -282,7 +289,8 @@ private:
   void pushGraphicalCharacter(const tjs_ustring &graph);
   void performLinebreak();
   void flush(bool force = false);
-  void updateFont();
+  void applyFont();
+  int getAscentHeight();
 };
 
 enum TextRenderMode {
@@ -312,6 +320,25 @@ static void read_integer(tTJSString const &str, size_t &i, int &value) {
   }
 }
 
+void TextRenderBase::applyFont() {
+  if (!m_fontDirty) return;
+  m_fontDirty = false;
+
+  tTVPFont font;
+  font.Height = m_state.fontSize;
+  font.Flags = static_cast<tjs_uint32>(
+      (m_state.bold ? TVP_TF_BOLD : 0) | (m_state.italic ? TVP_TF_ITALIC : 0));
+  font.Angle = 0;
+  font.Face = ttstr(m_state.face.c_str());
+  m_rasterizer->ApplyFont(font);
+  m_cachedAscentHeight = m_rasterizer->GetAscentHeight();
+}
+
+int TextRenderBase::getAscentHeight() {
+  applyFont();
+  return m_cachedAscentHeight;
+}
+
 bool TextRenderBase::render(tTJSString text, int autoIndent, int diff, int all, bool same) {
   m_autoIndent = autoIndent;
   size_t len = (size_t)text.GetLen();
@@ -332,28 +359,28 @@ bool TextRenderBase::render(tTJSString text, int autoIndent, int diff, int all, 
           fontname += ch;
         }
         if (!fontname.empty()) m_state.face = fontname;
-        updateFont();
+        m_fontDirty = true;
         break;
       }
       case 'b': {
         int value = 0;
         read_integer(text, i, value);
         m_state.bold = (value != 0);
-        updateFont();
+        m_fontDirty = true;
         break;
       }
       case 'i': {
         int value = 0;
         read_integer(text, i, value);
         m_state.italic = (value != 0);
-        updateFont();
+        m_fontDirty = true;
         break;
       }
       case 's': {
         int value = 0;
         read_integer(text, i, value);
         m_state.fontSize = value;
-        updateFont();
+        m_fontDirty = true;
         break;
       }
       case 'e': {
@@ -367,13 +394,13 @@ bool TextRenderBase::render(tTJSString text, int autoIndent, int diff, int all, 
         read_integer(text, i, value);
         break;
       }
-      case 'r': m_state = m_default; updateFont(); break;
+      case 'r': m_state = m_default; m_fontDirty = true; break;
       case '0': case '1': case '2': case '3': case '4':
       case '5': case '6': case '7': case '8': case '9': {
         int value = static_cast<int>(ch - '0');
         read_integer(text, i, value);
         m_state.fontSize = m_default.fontSize * value / 100;
-        updateFont();
+        m_fontDirty = true;
         break;
       }
       default: break;
@@ -448,10 +475,9 @@ bool TextRenderBase::render(tTJSString text, int autoIndent, int diff, int all, 
 }
 
 void TextRenderBase::performLinebreak() {
-  auto rasterizer = GetCurrentRasterizer();
   m_x = m_indent;
   m_isBeginningOfLine = true;
-  m_y += rasterizer->GetAscentHeight() + m_state.lineSpacing;
+  m_y += getAscentHeight() + m_state.lineSpacing;
 }
 
 void TextRenderBase::pushGraphicalCharacter(const tjs_ustring &) {
@@ -473,11 +499,10 @@ void TextRenderBase::pushCharacter(tjs_char ch) {
     flush();
   }
 
-  auto rasterizer = GetCurrentRasterizer();
-  auto text_height = rasterizer->GetAscentHeight();
+  applyFont();
 
   int advance_width = 0, advance_height = 0;
-  rasterizer->GetTextExtent(ch, advance_width, advance_height);
+  m_rasterizer->GetTextExtent(ch, advance_width, advance_height);
 
   CharacterInfo info;
   info.bold = m_state.bold;
@@ -488,7 +513,7 @@ void TextRenderBase::pushCharacter(tjs_char ch) {
   info.x = 0;
   info.y = 0;
   info.cw = advance_width;
-  info.size = text_height;
+  info.size = m_cachedAscentHeight;
   info.color = m_state.chColor;
   info.edge = m_state.edge ? std::make_optional(m_state.edgeColor) : std::nullopt;
   info.shadow = m_state.shadow ? std::make_optional(m_state.shadowColor) : std::nullopt;
@@ -567,7 +592,9 @@ tTJSVariant TextRenderBase::getCharacters(int start, int end) {
     }
   }
 
-  return tTJSVariant(array, array);
+  auto res = tTJSVariant(array, array);
+  array->Release();
+  return res;
 }
 
 void TextRenderBase::clear() {
@@ -578,18 +605,7 @@ void TextRenderBase::clear() {
   m_y = 0;
   m_indent = 0;
   m_isBeginningOfLine = true;
-  updateFont();
-}
-
-void TextRenderBase::updateFont() {
-  auto rasterizer = GetCurrentRasterizer();
-  tTVPFont font;
-  font.Height = m_state.fontSize;
-  font.Flags = static_cast<tjs_uint32>(
-      (m_state.bold ? TVP_TF_BOLD : 0) | (m_state.italic ? TVP_TF_ITALIC : 0));
-  font.Angle = 0;
-  font.Face = ttstr(m_state.face.c_str());
-  rasterizer->ApplyFont(font);
+  m_fontDirty = true;
 }
 
 void TextRenderBase::done() {
@@ -598,12 +614,16 @@ void TextRenderBase::done() {
 
 tTJSVariant TextRenderBase::getKeyWait() {
   auto array = TJSCreateArrayObject();
-  return tTJSVariant(array, array);
+  auto res = tTJSVariant(array, array);
+  array->Release();
+  return res;
 }
 
 tTJSVariant TextRenderBase::renderDelay() {
   auto array = TJSCreateArrayObject();
-  return tTJSVariant(array, array);
+  auto res = tTJSVariant(array, array);
+  array->Release();
+  return res;
 }
 
 int TextRenderBase::calcShowCount(int elapsed) {
