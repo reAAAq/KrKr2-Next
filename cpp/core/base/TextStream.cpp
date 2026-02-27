@@ -83,13 +83,19 @@ public:
         if(size >= 3 && raw[0] == 0xFE && raw[1] == 0xFE) {
             std::uint8_t m = raw[2];
             if(m == 0 || m == 1) {
-                // 解密 UTF-16 数据
-                const auto *src =
-                    reinterpret_cast<const char16_t *>(raw.data() + 4);
-                size_t len = (size - 4) / 2;
+                size_t hdr = 3;
+                if(size >= 5 && raw[3] == 0xFF && raw[4] == 0xFE)
+                    hdr = 5; // skip unencrypted UTF-16LE BOM
+                else if(size >= 5 && raw[3] == 0xFE && raw[4] == 0xFF)
+                    hdr = 5; // skip unencrypted UTF-16BE BOM
+                size_t data_size = size - hdr;
+                if(data_size & 1) data_size--;
+                size_t len = data_size / 2;
                 _buffer.resize(len);
                 for(size_t i = 0; i < len; i++) {
-                    char16_t ch = src[i];
+                    char16_t ch =
+                        static_cast<char16_t>(raw[hdr + i * 2]) |
+                        (static_cast<char16_t>(raw[hdr + i * 2 + 1]) << 8);
                     if(m == 0) {
                         if(ch >= 0x20)
                             ch ^= (((ch & 0xfe) << 8) ^ 1);
