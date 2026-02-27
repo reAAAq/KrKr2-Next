@@ -168,16 +168,12 @@ class FlutterEngineBridgePlugin :
                     entry.surfaceTexture().setDefaultBufferSize(width, height)
                     Log.i("krkr2", "plugin.resizeSurfaceTexture: id=$textureId size=${width}x$height")
 
-                    // Update the C++ side with the new surface dimensions
-                    val surface = surfaces[textureId]
-                    if (surface != null) {
-                        try {
-                            nativeSetSurface(surface, width, height)
-                            Log.i("krkr2", "plugin.nativeSetSurface(resize): id=$textureId size=${width}x$height")
-                        } catch (e: UnsatisfiedLinkError) {
-                            android.util.Log.e("krkr2", "nativeSetSurface not available: ${e.message}")
-                        }
-                    }
+                    // Don't call nativeSetSurface here — releasing and re-acquiring
+                    // the ANativeWindow invalidates the EGL WindowSurface, causing
+                    // "Framebuffer is incomplete" errors. setDefaultBufferSize() is
+                    // sufficient; the EGL surface auto-adapts on next eglSwapBuffers.
+                    // The C++ engine updates its stored dimensions via
+                    // engineSetSurfaceSize() which is called before this method.
 
                     result.success(mapOf(
                         "textureId" to textureId,

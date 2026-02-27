@@ -160,6 +160,17 @@ public:
     uint32_t GetNativeWindowHeight() const { return window_height_; }
 
     /**
+     * Update stored native window dimensions after SurfaceTexture resize.
+     * setDefaultBufferSize() changes the buffer dimensions; the EGL surface
+     * auto-adapts on next eglSwapBuffers. We track the new size here so
+     * UpdateDrawBuffer() calculates the correct letterbox viewport.
+     */
+    void UpdateNativeWindowSize(uint32_t w, uint32_t h) {
+        window_width_ = w;
+        window_height_ = h;
+    }
+
+    /**
      * Mark the current frame as dirty (new content rendered).
      * Must be called after UpdateDrawBuffer() completes rendering.
      */

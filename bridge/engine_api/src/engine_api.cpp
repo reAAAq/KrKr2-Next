@@ -1390,17 +1390,22 @@ engine_result_t engine_set_surface_size(engine_handle_t handle,
   // Propagate the new surface size to the EGL context and viewport.
   if (g_runtime_active && g_runtime_owner == handle) {
     auto& egl = krkr::GetEngineEGLContext();
-    if (egl.IsValid() && !egl.HasNativeWindow()) {
-      // Pbuffer mode (macOS / iOS): resize the Pbuffer surface.
-      // Android WindowSurface mode is handled entirely by Flutter:
-      // the SurfaceTexture stays at its initial size and Flutter's
-      // FittedBox scales the display on rotation.
-      const uint32_t cur_w = egl.GetWidth();
-      const uint32_t cur_h = egl.GetHeight();
-      if (cur_w != width || cur_h != height) {
-        egl.Resize(width, height);
-        glViewport(0, 0, static_cast<GLsizei>(width),
-                   static_cast<GLsizei>(height));
+    if (egl.IsValid()) {
+      if (egl.HasNativeWindow()) {
+        // Android WindowSurface mode: setDefaultBufferSize() already
+        // changed the SurfaceTexture buffer dimensions. The EGL surface
+        // auto-adapts on next eglSwapBuffers. Update our stored
+        // dimensions so UpdateDrawBuffer() uses the correct viewport.
+        egl.UpdateNativeWindowSize(width, height);
+      } else {
+        // Pbuffer mode (macOS / iOS): resize the Pbuffer surface.
+        const uint32_t cur_w = egl.GetWidth();
+        const uint32_t cur_h = egl.GetHeight();
+        if (cur_w != width || cur_h != height) {
+          egl.Resize(width, height);
+          glViewport(0, 0, static_cast<GLsizei>(width),
+                     static_cast<GLsizei>(height));
+        }
       }
     }
 
