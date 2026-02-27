@@ -81,11 +81,14 @@ static void TVPSearchPluginsAt(std::vector<tTVPFoundPlugin> &list,
                                std::string folder) {
     TVPListDir(folder, [&](const std::string &filename, int mask) {
         if(mask & S_IFREG) {
-            if(!strcasecmp(filename.c_str() + filename.length() - 4, ".tpm")) {
-                tTVPFoundPlugin fp;
-                fp.Path = folder;
-                fp.Name = filename;
-                list.emplace_back(fp);
+            if(filename.length() >= 4) {
+                const char *ext = filename.c_str() + filename.length() - 4;
+                if(!strcasecmp(ext, ".tpm") || !strcasecmp(ext, ".dll")) {
+                    tTVPFoundPlugin fp;
+                    fp.Path = folder;
+                    fp.Name = filename;
+                    list.emplace_back(fp);
+                }
             }
         }
     });
@@ -93,7 +96,7 @@ static void TVPSearchPluginsAt(std::vector<tTVPFoundPlugin> &list,
 
 void TVPLoadInternalPlugins() {
     ncbAutoRegister::AllRegist();
-    ncbAutoRegister::LoadModule(TJS_W("xp3filter.dll"));
+    ncbAutoRegister::LoadAllModules();
 }
 
 bool TVPLoadInternalPlugin(const ttstr &_name) {

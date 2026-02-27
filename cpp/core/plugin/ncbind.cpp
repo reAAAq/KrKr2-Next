@@ -12,8 +12,7 @@ std::map<ttstr, ncbAutoRegister::INTERNAL_PLUGIN_LISTS > ncbAutoRegister::_inter
 bool ncbAutoRegister::LoadModule(const ttstr &_name)
 {
 	ttstr name = _name.AsLowerCase();
-	// already load
-    if (TVPRegisteredPlugins.find(name) != TVPRegisteredPlugins.end())
+	if (TVPRegisteredPlugins.find(name) != TVPRegisteredPlugins.end())
 		return true;
 	auto it = _internal_plugins.find(name);
 	if (it != _internal_plugins.end()) {
@@ -26,4 +25,19 @@ bool ncbAutoRegister::LoadModule(const ttstr &_name)
 		return true;
 	}
 	return false;
+}
+
+void ncbAutoRegister::LoadAllModules()
+{
+	for (auto &kv : _internal_plugins) {
+		const ttstr &name = kv.first;
+		if (TVPRegisteredPlugins.find(name) != TVPRegisteredPlugins.end())
+			continue;
+		for (const auto &plugin_list : kv.second.lists) {
+			for (auto i : plugin_list) {
+				i->Regist();
+			}
+		}
+		TVPRegisteredPlugins.insert(name);
+	}
 }

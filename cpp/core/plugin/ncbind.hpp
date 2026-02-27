@@ -2126,6 +2126,7 @@ struct ncbAutoRegister {
 	static void AllRegist()   { for (int line = 0; line < LINE_COUNT; line++) AllRegist(  static_cast<LineT>(line)); }
 	static void AllUnregist() { for (int line = 0; line < LINE_COUNT; line++) AllUnregist(static_cast<LineT>(line)); }
 	static bool LoadModule(const ttstr &_name);
+	static void LoadAllModules();
 protected:
 	virtual void Regist()   const = 0;
 	virtual void Unregist() const = 0;
@@ -2291,12 +2292,18 @@ protected:
 		typedef ncbNativeClassMethodBase::InvokeType IVT;
 		typedef ncbNativeClassMethod< IVT::InvokeCommand<void, MethodT, IVT::ivtNormal> > MethodObjectT;
 		iTJSDispatch2 *dsp = GetDispatch(attach);
-		if (!dsp) return;
+		if (!dsp) {
+			TVPAddLog(ttstr(TJS_W("FAILED: get dispatch for attach target: ")) + attach + TJS_W(" when registering: ") + name);
+			return;
+		}
 		RegistItem(dsp, name, new MethodObjectT(m));
 	}
 	static void RegistFunction(NameT name, NameT attach, ncbTypedefs::CallbackT m) {
 		iTJSDispatch2 *dsp = GetDispatch(attach);
-		if (!dsp) return;
+		if (!dsp) {
+			TVPAddLog(ttstr(TJS_W("FAILED: get dispatch for attach target: ")) + attach + TJS_W(" when registering: ") + name);
+			return;
+		}
 		RegistItem(dsp, name, TJSCreateNativeClassMethod(m));
 	}
 	template <typename T>
