@@ -201,6 +201,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get fpsLimitOff => 'オフ（VSync）';
 
   @override
+  String get forceLandscape => '横画面ロック';
+
+  @override
+  String get forceLandscapeDesc => 'ゲーム実行時に横向き表示を強制します（スマートフォン推奨）';
+
+  @override
   String get targetFrameRate => '目標フレームレート';
 
   @override

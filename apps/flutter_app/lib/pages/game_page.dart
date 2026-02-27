@@ -19,11 +19,13 @@ class GamePage extends StatefulWidget {
     required this.gamePath,
     this.ffiLibraryPath,
     this.engineBridgeBuilder = createEngineBridge,
+    this.forceLandscape = true,
   });
 
   final String gamePath;
   final String? ffiLibraryPath;
   final EngineBridgeBuilder engineBridgeBuilder;
+  final bool forceLandscape;
 
   @override
   State<GamePage> createState() => _GamePageState();
@@ -61,6 +63,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   final GlobalKey<EnginePerformanceOverlayState> _perfOverlayKey0 =
       GlobalKey<EnginePerformanceOverlayState>();
 
+  // Orientation
+  bool _forceLandscape = true;
+
   // State
   _EnginePhase _phase = _EnginePhase.initializing;
   String? _errorMessage;
@@ -79,8 +84,10 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _forceLandscape = widget.forceLandscape;
     _bridge = widget.engineBridgeBuilder(ffiLibraryPath: widget.ffiLibraryPath);
     _loadSettings();
+    _applyOrientation();
     _log('Initializing engine for: ${widget.gamePath}');
     if (widget.ffiLibraryPath != null) {
       _log('Using custom dylib: ${widget.ffiLibraryPath}');
@@ -101,6 +108,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _stopTickLoop(notify: false);
     unawaited(_bridge.engineDestroy());
+    _restoreOrientation();
     super.dispose();
   }
 
@@ -578,12 +586,28 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     if (mounted) {
       final fps = prefs.getInt(PrefsKeys.targetFps) ?? PrefsKeys.defaultFps;
       final fpsLimitEnabled = prefs.getBool(PrefsKeys.fpsLimitEnabled) ?? false;
+      _forceLandscape = prefs.getBool(PrefsKeys.forceLandscape) ?? true;
       setState(() {
         _showPerfOverlay = prefs.getBool(PrefsKeys.perfOverlay) ?? false;
         _targetFps = fps;
         _fpsLimitEnabled = fpsLimitEnabled;
       });
     }
+  }
+
+  void _applyOrientation() {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    if (_forceLandscape) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    }
+  }
+
+  void _restoreOrientation() {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
   }
 
   /// Apply the current fps_limit setting to the C++ engine layer.
@@ -637,6 +661,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
   void _exitGame() {
     _stopTickLoop(notify: false);
+    _restoreOrientation();
     Navigator.of(context).pop();
   }
 

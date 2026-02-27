@@ -15,6 +15,7 @@ class PrefsKeys {
   static const String angleBackend = 'krkr2_angle_backend';
   static const String locale = 'krkr2_locale';
   static const String themeMode = 'krkr2_theme_mode';
+  static const String forceLandscape = 'krkr2_force_landscape';
 
   // ── Engine option keys (must match C++ ENGINE_OPTION_* constants) ─
   static const String optionAngleBackend = 'angle_backend';

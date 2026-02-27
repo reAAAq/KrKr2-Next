@@ -175,6 +175,7 @@ class EngineSurfaceState extends State<EngineSurface> {
       1,
       16384,
     );
+
     if (width == _surfaceWidth && height == _surfaceHeight) {
       await _ensureRenderTarget();
       return;

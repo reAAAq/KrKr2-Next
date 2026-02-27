@@ -466,6 +466,18 @@ abstract class AppLocalizations {
   /// **'Off (VSync)'**
   String get fpsLimitOff;
 
+  /// No description provided for @forceLandscape.
+  ///
+  /// In en, this message translates to:
+  /// **'Lock Landscape'**
+  String get forceLandscape;
+
+  /// No description provided for @forceLandscapeDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Force landscape orientation when running games (recommended for phones)'**
+  String get forceLandscapeDesc;
+
   /// No description provided for @targetFrameRate.
   ///
   /// In en, this message translates to:

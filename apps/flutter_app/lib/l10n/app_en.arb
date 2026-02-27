@@ -86,6 +86,8 @@
   "fpsLimitEnabled": "Frame Rate Limit",
   "fpsLimitEnabledDesc": "Limit engine rendering frequency to save power",
   "fpsLimitOff": "Off (VSync)",
+  "forceLandscape": "Lock Landscape",
+  "forceLandscapeDesc": "Force landscape orientation when running games (recommended for phones)",
   "targetFrameRate": "Target Frame Rate",
   "targetFrameRateDesc": "Maximum rendering frequency when limit is enabled",
   "fpsLabel": "{fps} FPS",

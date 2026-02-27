@@ -71,6 +71,8 @@
   "fpsLimitEnabled": "フレームレート制限",
   "fpsLimitEnabledDesc": "エンジンの描画頻度を制限して省電力",
   "fpsLimitOff": "オフ（VSync）",
+  "forceLandscape": "横画面ロック",
+  "forceLandscapeDesc": "ゲーム実行時に横向き表示を強制します（スマートフォン推奨）",
   "targetFrameRate": "目標フレームレート",
   "targetFrameRateDesc": "制限有効時の最大描画頻度",
   "fpsLabel": "{fps} FPS",

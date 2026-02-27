@@ -208,6 +208,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fpsLimitOff => 'Off (VSync)';
 
   @override
+  String get forceLandscape => 'Lock Landscape';
+
+  @override
+  String get forceLandscapeDesc =>
+      'Force landscape orientation when running games (recommended for phones)';
+
+  @override
   String get targetFrameRate => 'Target Frame Rate';
 
   @override

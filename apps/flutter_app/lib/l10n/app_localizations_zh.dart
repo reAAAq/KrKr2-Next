@@ -199,6 +199,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get fpsLimitOff => '关闭（垂直同步）';
 
   @override
+  String get forceLandscape => '锁定横屏';
+
+  @override
+  String get forceLandscapeDesc => '游戏运行时强制横屏显示（手机推荐开启）';
+
+  @override
   String get targetFrameRate => '目标帧率';
 
   @override

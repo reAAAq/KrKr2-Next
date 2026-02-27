@@ -71,6 +71,8 @@
   "fpsLimitEnabled": "帧率限制",
   "fpsLimitEnabledDesc": "限制引擎渲染频率以节省功耗",
   "fpsLimitOff": "关闭（垂直同步）",
+  "forceLandscape": "锁定横屏",
+  "forceLandscapeDesc": "游戏运行时强制横屏显示（手机推荐开启）",
   "targetFrameRate": "目标帧率",
   "targetFrameRateDesc": "启用限制时的最大渲染频率",
   "fpsLabel": "{fps} FPS",
