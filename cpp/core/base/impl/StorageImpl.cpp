@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <cstring>
 #include <filesystem>
+#include <algorithm>
 #include <set>
 #include <sys/stat.h>
 #include <vector>
@@ -1480,6 +1481,8 @@ bool TVPSaveStreamToFile(tTJSBinaryStream *st, tjs_uint64 offset,
 //---------------------------------------------------------------------------
 // TVPAutoMountSiblingXP3Archives
 //---------------------------------------------------------------------------
+static std::vector<ttstr> TVPAutoMountedPaths;
+
 void TVPAutoMountSiblingXP3Archives() {
     if(TVPProjectDir.GetLastChar() != TJS_W('/'))
         return;
@@ -1541,6 +1544,8 @@ void TVPAutoMountSiblingXP3Archives() {
     }
     closedir(dirp);
 
+    std::sort(xp3Names.begin(), xp3Names.end());
+
     if(xp3Names.empty()) {
         TVPAddImportantLog(TJS_W("(info) No sibling XP3 archives found"));
         return;
@@ -1590,6 +1595,7 @@ void TVPAutoMountSiblingXP3Archives() {
             ttstr autoPath = archiveBase + dirStr;
             try {
                 TVPAddAutoPath(autoPath);
+                TVPAutoMountedPaths.push_back(TVPNormalizeStorageName(autoPath));
             } catch(...) {}
         }
 
@@ -1599,4 +1605,23 @@ void TVPAutoMountSiblingXP3Archives() {
             ttstr((tjs_int)dirPaths.size()) + ttstr(TJS_W(" dirs, ")) +
             ttstr((tjs_int)fileCount) + ttstr(TJS_W(" files)")));
     }
+}
+
+void TVPBoostAutoMountPaths() {
+    if(TVPAutoMountedPaths.empty()) return;
+
+    extern std::vector<ttstr> TVPAutoPathList;
+    extern bool AutoPathTableInit;
+
+    for(const auto &p : TVPAutoMountedPaths) {
+        auto it = std::find(TVPAutoPathList.begin(), TVPAutoPathList.end(), p);
+        if(it != TVPAutoPathList.end())
+            TVPAutoPathList.erase(it);
+        TVPAutoPathList.push_back(p);
+    }
+    TVPAutoMountedPaths.clear();
+
+    AutoPathTableInit = false;
+    spdlog::info("TVPBoostAutoMountPaths: re-ordered {} patch paths to end of auto path list",
+                 TVPAutoPathList.size());
 }

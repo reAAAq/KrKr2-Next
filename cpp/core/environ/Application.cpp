@@ -368,6 +368,8 @@ bool tTVPApplication::StartApplication(ttstr path) {
         spdlog::debug("StartApplication: TVPInitializeStartupScript...");
         spdlog::default_logger()->flush();
         TVPInitializeStartupScript();
+
+        TVPBoostAutoMountPaths();
         _project_startup = true;
         spdlog::info("StartApplication: completed successfully");
         spdlog::default_logger()->flush();

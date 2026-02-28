@@ -95,7 +95,11 @@ std::string checkTextEncoding(const void *buf, size_t size,
         if(hasNonAsciiBytes(raw, size)) {
             if(encoding.empty() || encoding == "ASCII") {
                 encoding = "cp932";
-            } else if(encoding == "UTF-8" && !isValidUTF8(raw, size)) {
+            } else if(encoding == "UTF-8") {
+                if(!isValidUTF8(raw, size))
+                    encoding = "cp932";
+            } else if(encoding != "cp932" && encoding != "EUC-JP" &&
+                       encoding != "ISO-2022-JP") {
                 encoding = "cp932";
             }
         }

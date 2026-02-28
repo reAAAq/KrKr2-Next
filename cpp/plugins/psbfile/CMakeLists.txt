@@ -19,4 +19,5 @@ target_sources(${PROJECT_NAME} PUBLIC
     resources/ImageMetadata.cpp
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE krkr2plugin)
+find_package(ZLIB REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE krkr2plugin ZLIB::ZLIB)

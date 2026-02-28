@@ -300,9 +300,41 @@ TJS_BEGIN_NATIVE_METHOD_DECL(/*func. name*/ _compile) {
             onig_free(_this->RegEx);
             _this->RegEx = nullptr;
         }
+
+        ttstr pattern(exprstart,
+                      (tjs_int)(expr.c_str() + expr.length() - exprstart));
+
+        ttstr fixed;
+        const tjs_char *s = pattern.c_str();
+        tjs_int len = pattern.GetLen();
+        for(tjs_int i = 0; i < len; i++) {
+            if(s[i] == TJS_W('\\') && i + 1 < len &&
+               s[i + 1] == TJS_W('x')) {
+                tjs_int hexStart = i + 2;
+                tjs_int hexLen = 0;
+                while(hexStart + hexLen < len &&
+                      ((s[hexStart + hexLen] >= TJS_W('0') &&
+                        s[hexStart + hexLen] <= TJS_W('9')) ||
+                       (s[hexStart + hexLen] >= TJS_W('a') &&
+                        s[hexStart + hexLen] <= TJS_W('f')) ||
+                       (s[hexStart + hexLen] >= TJS_W('A') &&
+                        s[hexStart + hexLen] <= TJS_W('F'))))
+                    hexLen++;
+                if(hexLen > 2) {
+                    fixed += TJS_W("\\x{");
+                    fixed += ttstr(s + hexStart, hexLen);
+                    fixed += TJS_W("}");
+                    i = hexStart + hexLen - 1;
+                    continue;
+                }
+            }
+            fixed += s[i];
+        }
+
+        const tjs_char *fp = fixed.c_str();
         OnigErrorInfo einfo;
-        int r = onig_new(&(_this->RegEx), (UChar *)exprstart,
-                         (UChar *)(expr.c_str() + expr.length()),
+        int r = onig_new(&(_this->RegEx), (UChar *)fp,
+                         (UChar *)(fp + fixed.GetLen()),
                          flags & ((ONIG_OPTION_MAXBIT << 1) - 1),
                          ONIG_ENCODING_UTF16_LE, ONIG_SYNTAX_PERL, &einfo);
         if(r) {

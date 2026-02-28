@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <memory>
+#include <zlib.h>
 
 #include "EMoteCTX.h"
 #include "ncbind.hpp"
@@ -327,29 +328,59 @@ namespace PSB {
             return false;
 
         const size_t readSize = s->GetSize();
-        if(readSize < 9)
+        if(readSize < 9) {
+            delete s;
             return false;
+        }
 
-        tTVPMemoryStream stream{ nullptr, static_cast<tjs_uint>(readSize) };
-        s->Read(stream.GetInternalBuffer(), readSize);
+        auto *fileData = new uint8_t[readSize];
+        s->Read(fileData, readSize);
         delete s;
 
-        constexpr int signSize = 4;
-        char sign[signSize];
-        stream.Read(sign, signSize);
+        char sign[4];
+        memcpy(sign, fileData, 4);
 
-        if(10 < readSize && std::strcmp(sign, "MDF") == 0) {
-            // auto originalLen = readSize - 8;
-            // uLong compressedLen = compressBound(originalLen);
-            // auto *compressed = new Bytef[compressedLen];
-            // stream = uncompress(compressed, &compressedLen,
-            //                       reinterpret_cast<const Bytef *>(buffer[2]),
-            //                       originalLen);
-            // if(code == 0) {
-            //     delete[] buffer;
-            //     return false;
-            // }
-            LOGGER->info("PSBFile::load MDF not implement!");
+        bool isMdf = ((sign[0] & ~0x20) == 'M') &&
+                     ((sign[1] & ~0x20) == 'D') &&
+                     ((sign[2] & ~0x20) == 'F') &&
+                     sign[3] == '\0';
+
+        if(!isMdf &&
+           std::strcmp(sign, PsbSignature) != 0 &&
+           std::strcmp(sign, MflSignature) != 0) {
+            LOGGER->warn("Not a PSB/MDF/MFL file: {}", filePath.AsStdString());
+            delete[] fileData;
+            return false;
+        }
+
+        size_t psbSize;
+        if(isMdf) {
+            uint32_t uncompressedSize;
+            memcpy(&uncompressedSize, fileData + 4, 4);
+            psbSize = uncompressedSize;
+        } else {
+            psbSize = readSize;
+        }
+
+        tTVPMemoryStream stream{ nullptr, static_cast<tjs_uint>(psbSize) };
+
+        if(isMdf) {
+            uLongf destLen = static_cast<uLongf>(psbSize);
+            int zResult = uncompress(
+                static_cast<Bytef *>(stream.GetInternalBuffer()), &destLen,
+                fileData + 8, static_cast<uLong>(readSize - 8));
+            delete[] fileData;
+
+            if(zResult != Z_OK) {
+                LOGGER->warn("MDF decompression failed: zlib error {} ({})",
+                             zResult, filePath.AsStdString());
+                return false;
+            }
+            LOGGER->debug("MDF decompressed: {} -> {} bytes ({})",
+                          readSize, destLen, filePath.AsStdString());
+        } else {
+            memcpy(stream.GetInternalBuffer(), fileData, readSize);
+            delete[] fileData;
         }
 
         stream.SetPosition(0);
@@ -434,6 +465,8 @@ namespace PSB {
         }
 
         if(std::strcmp(_header.signature, PSB::PsbSignature) != 0) {
+            LOGGER->warn("Not a valid PSB file ({}): signature='{}'",
+                filePath.AsStdString(), _header.signature);
             return false;
         }
 
