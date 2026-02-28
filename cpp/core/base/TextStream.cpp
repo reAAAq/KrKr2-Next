@@ -16,6 +16,40 @@
 
 static std::string G_DefaultReadEncoding = "UTF-8";
 
+static bool hasNonAsciiBytes(const unsigned char *raw, size_t size) {
+    for(size_t i = 0; i < size; i++) {
+        if(raw[i] >= 0x80)
+            return true;
+    }
+    return false;
+}
+
+static bool isValidUTF8(const unsigned char *raw, size_t size) {
+    size_t i = 0;
+    while(i < size) {
+        if(raw[i] < 0x80) {
+            i++;
+            continue;
+        }
+        int cont = 0;
+        if((raw[i] & 0xE0) == 0xC0)
+            cont = 1;
+        else if((raw[i] & 0xF0) == 0xE0)
+            cont = 2;
+        else if((raw[i] & 0xF8) == 0xF0)
+            cont = 3;
+        else
+            return false;
+        i++;
+        while(cont-- > 0) {
+            if(i >= size || (raw[i] & 0xC0) != 0x80)
+                return false;
+            i++;
+        }
+    }
+    return true;
+}
+
 std::string checkTextEncoding(const void *buf, size_t size,
                               std::uint8_t &bomSize) {
     auto raw = static_cast<const unsigned char *>(buf);
@@ -54,6 +88,16 @@ std::string checkTextEncoding(const void *buf, size_t size,
             encoding = "cp932";
         } else if(encoding == "WINDOWS-1252") {
             encoding = "ASCII";
+        } else if(encoding.find("MAC") != std::string::npos) {
+            encoding = "cp932";
+        }
+
+        if(hasNonAsciiBytes(raw, size)) {
+            if(encoding.empty() || encoding == "ASCII") {
+                encoding = "cp932";
+            } else if(encoding == "UTF-8" && !isValidUTF8(raw, size)) {
+                encoding = "cp932";
+            }
         }
     }
 
