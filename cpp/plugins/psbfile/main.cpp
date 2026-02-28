@@ -38,7 +38,7 @@ void deInitPsbFile() {
 static tjs_error getRoot(tTJSVariant *r, tjs_int n, tTJSVariant **p,
                          iTJSDispatch2 *obj) {
     auto *self = ncbInstanceAdaptor<PSB::PSBFile>::GetNativeInstance(obj);
-    iTJSDispatch2 *dic = TJSCreateCustomObject();
+    iTJSDispatch2 *dic = TJSCreateDictionaryObject();
     auto objs = self->getObjects();
     if(objs != nullptr) {
         for(const auto &[k, v] : *objs) {
@@ -50,6 +50,23 @@ static tjs_error getRoot(tTJSVariant *r, tjs_int n, tTJSVariant **p,
     *r = tTJSVariant{ dic, dic };
     dic->Release();
     return TJS_S_OK;
+}
+
+static void registerPsbResources(PSBFile *self, ttstr path) {
+    if(!psbMedia)
+        return;
+    psbMedia->NormalizeDomainName(path);
+    auto objs = self->getObjects();
+    if(!objs)
+        return;
+    for(const auto &[k, v] : *objs) {
+        const auto &res = std::dynamic_pointer_cast<PSBResource>(v);
+        if(res == nullptr)
+            continue;
+        ttstr pathN{ k };
+        psbMedia->NormalizePathName(pathN);
+        psbMedia->add((path + TJS_W("/") + pathN).AsStdString(), res);
+    }
 }
 
 static tjs_error load(tTJSVariant *r, tjs_int count, tTJSVariant **p,
@@ -66,16 +83,7 @@ static tjs_error load(tTJSVariant *r, tjs_int count, tTJSVariant **p,
             LOGGER->info("cannot load psb file : {}", path.AsStdString());
             loadSuccess = false;
         }
-        auto objs = self->getObjects();
-        for(const auto &[k, v] : *objs) {
-            const auto &res = std::dynamic_pointer_cast<PSBResource>(v);
-            if(res == nullptr)
-                continue;
-            ttstr pathN{ k };
-            psbMedia->NormalizeDomainName(path);
-            psbMedia->NormalizePathName(pathN);
-            psbMedia->add((path + TJS_W("/") + pathN).AsStdString(), res);
-        }
+        registerPsbResources(self, path);
     } else if((*p)->Type() == tvtOctet) {
         LOGGER->critical("PSBFile::load stream no implement!");
         loadSuccess = false;
@@ -134,6 +142,7 @@ static tjs_error PSBFileFactory(PSBFile **result, tjs_int count,
         ttstr path{ *params[0] };
         psbFile = new PSBFile();
         psbFile->loadPSBFile(path);
+        registerPsbResources(psbFile, path);
     } else {
         return TJS_E_INVALIDPARAM;
     }
