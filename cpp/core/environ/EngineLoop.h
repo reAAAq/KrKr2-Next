@@ -132,4 +132,9 @@ private:
 
     bool started_ = false;
     bool update_enabled_ = false;
+
+    // Stored mouse-down position for click event (mirrors original engine's
+    // LastMouseDownX/Y).  OnClick uses the down position, not up position.
+    int32_t last_mouse_down_x_ = 0;
+    int32_t last_mouse_down_y_ = 0;
 };

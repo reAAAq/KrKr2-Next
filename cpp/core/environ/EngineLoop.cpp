@@ -227,6 +227,9 @@ void EngineLoop::HandlePointerDown(const EngineInputEvent& event) {
         default: break;
     }
 
+    last_mouse_down_x_ = x;
+    last_mouse_down_y_ = y;
+
     TVPPostInputEvent(
         new tTVPOnMouseDownInputEvent(win, x, y, mb, flags));
 }
@@ -279,6 +282,15 @@ void EngineLoop::HandlePointerUp(const EngineInputEvent& event) {
 
     TVPPostInputEvent(
         new tTVPOnMouseUpInputEvent(win, x, y, mb, shift));
+
+    // Post click event after mouse-up, matching the original Windows engine
+    // which fires OnMouseClick (→ Window.onClick → PrimaryClick) after
+    // OnMouseUp.  Uses the stored down position per original behavior.
+    if (mb == mbLeft) {
+        TVPPostInputEvent(
+            new tTVPOnClickInputEvent(win, last_mouse_down_x_,
+                                      last_mouse_down_y_));
+    }
 }
 
 void EngineLoop::HandlePointerScroll(const EngineInputEvent& event) {
