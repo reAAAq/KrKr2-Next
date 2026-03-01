@@ -197,7 +197,7 @@ class EngineFfiBridge {
   }
 
   String drainStartupLogs() {
-    const int bufferSize = 8192;
+    const int bufferSize = 65536;
     final buffer = calloc<Uint8>(bufferSize);
     final outBytesWritten = calloc<Uint32>();
     try {

@@ -73,7 +73,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   bool _showDebug = false;
   int _tickCount = 0;
   final List<String> _logs = [];
-  static const int _maxLogs = 80;
+  static const int _maxLogs = 2000;
 
   // ScrollController for boot log auto-scroll
   final ScrollController _bootLogScrollController = ScrollController();
@@ -501,15 +501,19 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   }
 
   Future<void> _drainStartupLogs() async {
-    final raw = await _bridge.engineDrainStartupLogs();
-    if (raw.isEmpty) {
-      return;
-    }
-    final lines = raw.split('\n');
-    for (final line in lines) {
-      final trimmed = line.trim();
-      if (trimmed.isNotEmpty) {
-        _log(trimmed);
+    // Drain in a short burst so high-volume native logs are shown in time
+    // during startup and don't overflow the native startup queue.
+    for (var i = 0; i < 8; i++) {
+      final raw = await _bridge.engineDrainStartupLogs();
+      if (raw.isEmpty) {
+        break;
+      }
+      final lines = raw.split('\n');
+      for (final line in lines) {
+        final trimmed = line.trim();
+        if (trimmed.isNotEmpty) {
+          _log(trimmed);
+        }
       }
     }
   }

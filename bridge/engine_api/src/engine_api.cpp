@@ -30,6 +30,7 @@ void krkr_GetSurfaceDimensions(uint32_t*, uint32_t*);
 #endif
 
 #include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/sinks/sink.h>
 #include <spdlog/spdlog.h>
 
 #include "environ/Application.h"
@@ -131,6 +132,21 @@ bool g_engine_bootstrapped = false;
 bool g_runtime_startup_active = false;
 engine_handle_t g_runtime_startup_owner = nullptr;
 std::once_flag g_loggers_init_once;
+std::shared_ptr<spdlog::sinks::sink> g_startup_log_sink;
+constexpr size_t kMaxStartupLogs = 4000;
+
+void PushRuntimeSpdlogToStartupQueue(const spdlog::details::log_msg& msg);
+
+class StartupLogSink final : public spdlog::sinks::sink {
+ public:
+  void log(const spdlog::details::log_msg& msg) override {
+    PushRuntimeSpdlogToStartupQueue(msg);
+  }
+
+  void flush() override {}
+  void set_pattern(const std::string&) override {}
+  void set_formatter(std::unique_ptr<spdlog::formatter>) override {}
+};
 
 std::shared_ptr<spdlog::logger> EnsureNamedLogger(const char* name) {
   if (auto logger = spdlog::get(name); logger != nullptr) {
@@ -174,8 +190,26 @@ void EnsureRuntimeLoggersInitialized() {
     // Flush every log message so crash logs are never lost
     spdlog::flush_on(spdlog::level::debug);
     auto core_logger = EnsureNamedLogger("core");
-    EnsureNamedLogger("tjs2");
-    EnsureNamedLogger("plugin");
+    auto tjs2_logger = EnsureNamedLogger("tjs2");
+    auto plugin_logger = EnsureNamedLogger("plugin");
+    g_startup_log_sink = std::make_shared<StartupLogSink>();
+    auto attach_sink = [](const std::shared_ptr<spdlog::logger>& logger) {
+      if (logger == nullptr || g_startup_log_sink == nullptr) {
+        return;
+      }
+      auto& sinks = logger->sinks();
+      const auto already_attached = std::any_of(
+          sinks.begin(), sinks.end(),
+          [](const std::shared_ptr<spdlog::sinks::sink>& sink) {
+            return sink.get() == g_startup_log_sink.get();
+          });
+      if (!already_attached) {
+        sinks.push_back(g_startup_log_sink);
+      }
+    };
+    attach_sink(core_logger);
+    attach_sink(tjs2_logger);
+    attach_sink(plugin_logger);
     if (core_logger != nullptr) {
       spdlog::set_default_logger(core_logger);
     }
@@ -239,10 +273,44 @@ void ClearHandleErrorLocked(engine_handle_s* impl) {
 void PushStartupLog(engine_handle_s* impl, const std::string& message) {
   std::lock_guard<std::mutex> guard(impl->startup.mutex);
   impl->startup.logs.push_back(message);
-  constexpr size_t kMaxStartupLogs = 200;
   while (impl->startup.logs.size() > kMaxStartupLogs) {
     impl->startup.logs.pop_front();
   }
+}
+
+void PushRuntimeSpdlogToStartupQueue(const spdlog::details::log_msg& msg) {
+  engine_handle_s* target = nullptr;
+  {
+    std::lock_guard<std::recursive_mutex> registry_guard(g_registry_mutex);
+    if (!g_runtime_startup_active || g_runtime_startup_owner == nullptr) {
+      return;
+    }
+    if (!IsHandleLiveLocked(g_runtime_startup_owner)) {
+      return;
+    }
+    target = reinterpret_cast<engine_handle_s*>(g_runtime_startup_owner);
+  }
+  if (target == nullptr) {
+    return;
+  }
+
+  const auto level_sv = spdlog::level::to_string_view(msg.level);
+  const std::string level(level_sv.data(), level_sv.size());
+  std::string logger(msg.logger_name.data(), msg.logger_name.size());
+  if (logger.empty()) {
+    logger = "core";
+  }
+  const std::string payload(msg.payload.data(), msg.payload.size());
+
+  std::string line;
+  line.reserve(logger.size() + level.size() + payload.size() + 8);
+  line.append("[");
+  line.append(logger);
+  line.append("] [");
+  line.append(level);
+  line.append("] ");
+  line.append(payload);
+  PushStartupLog(target, line);
 }
 
 void SetStartupState(engine_handle_s* impl, uint32_t state) {
