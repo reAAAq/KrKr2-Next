@@ -130,7 +130,7 @@ layerExMovie::layerExMovie(DispatchT obj) :
  */
 layerExMovie::~layerExMovie() {
     stopMovie();
-    // if (UtilWindow) delete UtilWindow;
+    clearMovie();
     if(Bitmap[0])
         delete Bitmap[0];
     if(Bitmap[1])
@@ -141,9 +141,10 @@ void layerExMovie::clearMovie() {
     if(VideoOverlay) {
         VideoOverlay->Release(), VideoOverlay = nullptr;
     }
-    // 	if (in) {
-    // 		delete in;
-    // 	}
+    if(in) {
+        delete in;
+        in = nullptr;
+    }
 }
 
 /**

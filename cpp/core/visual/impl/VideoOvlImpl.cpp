@@ -246,8 +246,6 @@ void tTJSNI_VideoOverlay::Open(const ttstr &_name) {
 }
 //---------------------------------------------------------------------------
 void tTJSNI_VideoOverlay::Close() {
-    // close
-    // release VideoOverlay object
     if(VideoOverlay) {
         if(CachedOverlay) {
             CachedOverlay->Release();
@@ -255,9 +253,8 @@ void tTJSNI_VideoOverlay::Close() {
         }
         VideoOverlay->SetVisible(false);
         VideoOverlay->Pause();
-        CachedOverlay = VideoOverlay;
+        VideoOverlay->Release();
         VideoOverlay = nullptr;
-        //		::SetFocus(Window->GetWindowHandle());
     }
     if(LocalTempStorageHolder)
         delete LocalTempStorageHolder, LocalTempStorageHolder = nullptr;
@@ -274,9 +271,6 @@ void tTJSNI_VideoOverlay::Close() {
 }
 //---------------------------------------------------------------------------
 void tTJSNI_VideoOverlay::Shutdown() {
-    // shutdown the system
-    // this functions closes the overlay object, but must not fire any
-    // events.
     bool c = CanDeliverEvents;
     ClearWndProcMessages();
     SetStatus(ssUnload);
@@ -288,7 +282,7 @@ void tTJSNI_VideoOverlay::Shutdown() {
             }
             VideoOverlay->SetVisible(false);
             VideoOverlay->Pause();
-            CachedOverlay = VideoOverlay;
+            VideoOverlay->Release();
             VideoOverlay = nullptr;
         }
     } catch(...) {
@@ -534,19 +528,18 @@ void tTJSNI_VideoOverlay::WndProc(NativeEvent &ev) {
                                         perLoop); // fire period event
                                                   // by loop rewind
                                 } else {
-                                    // Graph manager seems not to
-                                    // complete playing at this point
-                                    // (rewinding the movie at the
-                                    // event handler called
-                                    // asynchronously from
-                                    // SetStatusAsync makes continuing
-                                    // playing, but the graph seems to
-                                    // be unstable).
-                                    // We manually stop the manager
-                                    // anyway.
+                                    TVPAddLog(TJS_W("(info) Video EC_COMPLETE: releasing video resources"));
+                                    SetStatusAsync(ssStop);
                                     VideoOverlay->Stop();
-                                    SetStatusAsync(ssStop); // All data has been
-                                                            // rendered
+                                    if(CachedOverlay) {
+                                        CachedOverlay->Release();
+                                        CachedOverlay = nullptr;
+                                    }
+                                    VideoOverlay->Release();
+                                    VideoOverlay = nullptr;
+                                    if(Bitmap[0]) { delete Bitmap[0]; Bitmap[0] = nullptr; }
+                                    if(Bitmap[1]) { delete Bitmap[1]; Bitmap[1] = nullptr; }
+                                    BmpBits[0] = BmpBits[1] = nullptr;
                                 }
                             }
                             break;

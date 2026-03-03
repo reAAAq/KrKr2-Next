@@ -352,10 +352,10 @@ tjs_int TVPGetSystemFreeMemory() {
     host_page_size(mach_host_self(), &page_size);
 
     // 计算可用内存 (空闲内存 + 非活跃内存)
-    natural_t free_memory = (vm_stats.free_count + vm_stats.inactive_count) * page_size;
+    int64_t free_memory = ((int64_t)vm_stats.free_count + vm_stats.inactive_count) * page_size;
 
     // 转换为 MB
-    return free_memory / (1024 * 1024);
+    return (tjs_int)(free_memory / (1024 * 1024));
 }
 
 int TVPShowSimpleMessageBox(const ttstr &text, const ttstr &caption,

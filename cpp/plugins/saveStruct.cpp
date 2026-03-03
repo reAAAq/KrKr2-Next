@@ -231,31 +231,28 @@ public:
             return TJS_E_BADPARAMCOUNT;
         tTJSBinaryStream *stream =
             TVPCreateStream(param[0]->AsString(), TJS_BS_WRITE);
-        tTVPStringStream writer(stream,
-                                // numparams > 1 ? (int)*param[1] != 0: false,
-                                numparams > 2 ? (int)*param[2] : 0);
-        // 		IFileWriter writer(param[0]->GetString(),
-        // 						   numparams > 1 ? (int)*param[1]
-        // != 0:
-        // false, 						   numparams > 2
-        // ? (int)*param[2] : 0
-        // 						   );
-        //                 writer.hex = true;
-        tjs_int count = 0;
-        {
-            tTJSVariant result;
-            if(TJS_SUCCEEDED(ArrayCountProp->PropGet(0, nullptr, nullptr,
-                                                     &result, objthis))) {
-                count = result;
+        try {
+            tTVPStringStream writer(stream,
+                                    numparams > 2 ? (int)*param[2] : 0);
+            tjs_int count = 0;
+            {
+                tTJSVariant result;
+                if(TJS_SUCCEEDED(ArrayCountProp->PropGet(0, nullptr, nullptr,
+                                                         &result, objthis))) {
+                    count = result;
+                }
             }
-        }
-        for(tjs_int i = 0; i < count; i++) {
-            tTJSVariant result;
-            if(objthis->PropGetByNum(TJS_IGNOREPROP, i, &result, objthis) ==
-               TJS_S_OK) {
-                writer.write(result.GetString());
-                writer.newline();
+            for(tjs_int i = 0; i < count; i++) {
+                tTJSVariant result;
+                if(objthis->PropGetByNum(TJS_IGNOREPROP, i, &result, objthis) ==
+                   TJS_S_OK) {
+                    writer.write(result.GetString());
+                    writer.newline();
+                }
             }
+        } catch(...) {
+            delete stream;
+            throw;
         }
         delete stream;
         return TJS_S_OK;
@@ -274,17 +271,14 @@ public:
             return TJS_E_BADPARAMCOUNT;
         tTJSBinaryStream *stream =
             TVPCreateStream(param[0]->AsString(), TJS_BS_WRITE);
-        tTVPStringStream writer(stream,
-                                // numparams > 1 ? (int)*param[1] != 0: false,
-                                numparams > 2 ? (int)*param[2] : 0);
-        // 		IFileWriter writer(param[0]->GetString(),
-        // 						   numparams > 1 ? (int)*param[1]
-        // != 0:
-        // false, 						   numparams > 2
-        // ? (int)*param[2] : 0
-        // 						   );
-        //                 writer.hex = true;
-        getArrayString(objthis, &writer);
+        try {
+            tTVPStringStream writer(stream,
+                                    numparams > 2 ? (int)*param[2] : 0);
+            getArrayString(objthis, &writer);
+        } catch(...) {
+            delete stream;
+            throw;
+        }
         delete stream;
         return TJS_S_OK;
     }
@@ -334,10 +328,14 @@ public:
             return TJS_E_BADPARAMCOUNT;
         tTJSBinaryStream *stream =
             TVPCreateStream(param[0]->AsString(), TJS_BS_WRITE);
-        tTVPStringStream writer(stream,
-                                // numparams > 1 ? (int)*param[1] != 0: false,
-                                numparams > 2 ? (int)*param[2] : 0);
-        getDictString(objthis, &writer);
+        try {
+            tTVPStringStream writer(stream,
+                                    numparams > 2 ? (int)*param[2] : 0);
+            getDictString(objthis, &writer);
+        } catch(...) {
+            delete stream;
+            throw;
+        }
         delete stream;
         return TJS_S_OK;
     }

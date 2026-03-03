@@ -54,6 +54,18 @@ public:
     }
 
     ~FlutterWindowLayer() {
+        if(blit_program_) {
+            glDeleteProgram(blit_program_);
+            blit_program_ = 0;
+        }
+        if(blit_vbo_) {
+            glDeleteBuffers(1, &blit_vbo_);
+            blit_vbo_ = 0;
+        }
+        if(blit_texture_) {
+            glDeleteTextures(1, &blit_texture_);
+            blit_texture_ = 0;
+        }
         spdlog::debug("FlutterWindowLayer destroyed");
     }
 

@@ -194,10 +194,10 @@ tjs_int TVPGetSystemFreeMemory() {
     host_page_size(mach_host_self(), &page_size);
 
     // Free + inactive memory
-    natural_t free_memory = (vm_stats.free_count + vm_stats.inactive_count) * page_size;
+    int64_t free_memory = ((int64_t)vm_stats.free_count + vm_stats.inactive_count) * page_size;
 
     // Return in MB
-    return free_memory / (1024 * 1024);
+    return (tjs_int)(free_memory / (1024 * 1024));
 }
 
 // ---- UI dialogs (UIKit) ----
