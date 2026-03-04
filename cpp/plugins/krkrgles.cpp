@@ -9,6 +9,7 @@
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
+#include <GLES3/gl3.h>
 
 #define NCB_MODULE_NAME TJS_W("krkrgles.dll")
 
@@ -234,6 +235,8 @@ private:
     GLint prevFbo_ = 0;
 };
 
+} // end anonymous namespace (for exported symbols below)
+
 // ---------------------------------------------------------------------------
 // Find the first Layer object among the callback parameters.
 // The game may pass (intFlag, layer, ...) instead of (layer).
@@ -244,7 +247,6 @@ static iTJSDispatch2 *FindLayerInParams(tjs_int n, tTJSVariant **p) {
         if (p[i] && p[i]->Type() == tvtObject) {
             iTJSDispatch2 *obj = p[i]->AsObjectNoAddRef();
             if (!obj) continue;
-            // Verify it quacks like a Layer (has imageWidth property)
             tTJSVariant test;
             if (TJS_SUCCEEDED(obj->PropGet(0, TJS_W("imageWidth"), nullptr, &test, obj)))
                 return obj;
@@ -254,13 +256,75 @@ static iTJSDispatch2 *FindLayerInParams(tjs_int n, tTJSVariant **p) {
 }
 
 // ---------------------------------------------------------------------------
-// Copy pixels from a GL FBO → TJS Layer bitmap
-// GL outputs RGBA bottom-up; krkr2 Layer uses BGRA top-down.
+// GPU fast path: blit FBO → Layer's native GL texture via glBlitFramebuffer.
+// Returns true if GPU path was used, false if not available.
 // ---------------------------------------------------------------------------
-static bool CopyFBOToLayer(GLuint fbo, GLsizei srcW, GLsizei srcH,
-                           iTJSDispatch2 *layer) {
-    if (!fbo || srcW <= 0 || srcH <= 0 || !layer) return false;
+static bool CopyFBOToLayerGPU(GLuint srcFbo, GLsizei srcW, GLsizei srcH,
+                              iTJSDispatch2 *layer) {
+    tTJSVariant vTex, vIW, vIH;
+    if (TJS_FAILED(layer->PropGet(0, TJS_W("mainImageGLTexture"), nullptr, &vTex, layer)))
+        return false;
+    GLuint layerTexId = static_cast<GLuint>(static_cast<tTVInteger>(vTex));
+    if (layerTexId == 0) return false;
 
+    layer->PropGet(0, TJS_W("mainImageGLTextureInternalWidth"), nullptr, &vIW, layer);
+    layer->PropGet(0, TJS_W("mainImageGLTextureInternalHeight"), nullptr, &vIH, layer);
+    GLsizei intW = static_cast<GLsizei>(static_cast<tTVInteger>(vIW));
+    GLsizei intH = static_cast<GLsizei>(static_cast<tTVInteger>(vIH));
+    if (intW <= 0 || intH <= 0) return false;
+
+    tTJSVariant vW, vH;
+    layer->PropGet(0, TJS_W("imageWidth"), nullptr, &vW, layer);
+    layer->PropGet(0, TJS_W("imageHeight"), nullptr, &vH, layer);
+    GLsizei layerW = static_cast<GLsizei>(static_cast<tTVInteger>(vW));
+    GLsizei layerH = static_cast<GLsizei>(static_cast<tTVInteger>(vH));
+
+    GLint prevFbo;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
+
+    GLuint dstFbo = 0;
+    glGenFramebuffers(1, &dstFbo);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dstFbo);
+    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                           GL_TEXTURE_2D, layerTexId, 0);
+
+    if (glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prevFbo));
+        glDeleteFramebuffers(1, &dstFbo);
+        return false;
+    }
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, srcFbo);
+
+    GLsizei blitW = (layerW < srcW) ? layerW : srcW;
+    GLsizei blitH = (layerH < srcH) ? layerH : srcH;
+
+    // Source FBO is bottom-up (OGL convention); Layer texture in GPU mode
+    // is also OGL convention (bottom-up), so no Y-flip needed.
+    glBlitFramebuffer(0, 0, blitW, blitH,
+                      0, 0, blitW, blitH,
+                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prevFbo));
+    glDeleteFramebuffers(1, &dstFbo);
+
+    tjs_uint hint = 0;
+    layer->FuncCall(0, TJS_W("invalidateGLTextureCache"), &hint, nullptr, 0, nullptr, layer);
+
+    tTJSVariant vx(static_cast<tjs_int>(0)), vy(static_cast<tjs_int>(0)),
+                vw(static_cast<tjs_int>(blitW)), vh(static_cast<tjs_int>(blitH));
+    tTJSVariant *args[] = { &vx, &vy, &vw, &vh };
+    hint = 0;
+    layer->FuncCall(0, TJS_W("update"), &hint, nullptr, 4, args, layer);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// CPU fallback: read pixels from GL FBO → TJS Layer bitmap.
+// GL outputs RGBA bottom-up; krkr2 Layer CPU buffer uses BGRA top-down.
+// ---------------------------------------------------------------------------
+static bool CopyFBOToLayerCPU(GLuint fbo, GLsizei srcW, GLsizei srcH,
+                              iTJSDispatch2 *layer) {
     tTJSVariant vW, vH, vBuf, vPitch;
     layer->PropGet(0, TJS_W("imageWidth"), nullptr, &vW, layer);
     layer->PropGet(0, TJS_W("imageHeight"), nullptr, &vH, layer);
@@ -303,6 +367,22 @@ static bool CopyFBOToLayer(GLuint fbo, GLsizei srcW, GLsizei srcH,
     layer->FuncCall(0, TJS_W("update"), &hint, nullptr, 4, args, layer);
     return true;
 }
+
+// ---------------------------------------------------------------------------
+// Copy FBO → Layer with automatic GPU/CPU path selection.
+// ---------------------------------------------------------------------------
+bool CopyFBOToLayer(GLuint fbo, GLsizei srcW, GLsizei srcH,
+                    iTJSDispatch2 *layer) {
+    if (!fbo || srcW <= 0 || srcH <= 0 || !layer) return false;
+    if (CopyFBOToLayerGPU(fbo, srcW, srcH, layer)) return true;
+    return CopyFBOToLayerCPU(fbo, srcW, srcH, layer);
+}
+
+// Global registered Layer — set by entryUpdateObject, accessed by krkrlive2d.cpp
+static iTJSDispatch2 *g_registeredLayer = nullptr;
+iTJSDispatch2 *KrkrGLES_GetRegisteredLayer() { return g_registeredLayer; }
+
+namespace { // reopen anonymous namespace
 
 // Wrapper for OffscreenFBO (used when the module's own FBO has content)
 static bool CopyPixelsToLayer(OffscreenFBO &fbo, tjs_int numparams,
@@ -397,13 +477,22 @@ static tjs_error DictCreateDeviceCb(tTJSVariant *r, tjs_int, tTJSVariant **, iTJ
     return CreateObjectByExpression(r, TJS_W("new Live2DDevice()"), "fallback.createDevice");
 }
 
+static tjs_error DictEntryUpdateObjectCb(tTJSVariant *r, tjs_int n,
+                                         tTJSVariant **p, iTJSDispatch2 *) {
+    if (n > 0 && p) {
+        iTJSDispatch2 *layer = FindLayerInParams(n, p);
+        if (layer) g_registeredLayer = layer;
+    }
+    if (r) *r = true; return TJS_S_OK;
+}
+
 static tjs_error CreateFallbackModuleObject(tTJSVariant *result, tjs_int w, tjs_int h) {
     spdlog::warn("krkrgles: using fallback module ({}x{})", w, h);
     iTJSDispatch2 *dict = TJSCreateDictionaryObject();
     if (!dict) { if (result) result->Clear(); return TJS_E_FAIL; }
     SetObjectProperty(dict, TJS_W("screenWidth"), tTJSVariant(w));
     SetObjectProperty(dict, TJS_W("screenHeight"), tTJSVariant(h));
-    SetObjectMethod(dict, TJS_W("entryUpdateObject"), ReturnTrueCb);
+    SetObjectMethod(dict, TJS_W("entryUpdateObject"), DictEntryUpdateObjectCb);
     SetObjectMethod(dict, TJS_W("setScreenSize"), DictSetScreenSizeCb);
     SetObjectMethod(dict, TJS_W("makeCurrent"), ReturnTrueCb);
     SetObjectMethod(dict, TJS_W("beginScene"), ReturnTrueCb);
@@ -439,7 +528,14 @@ public:
 
     OffscreenFBO &GetFBO() { return fbo_; }
 
-    static tjs_error entryUpdateObjectCb(tTJSVariant *r, tjs_int, tTJSVariant **, GLESModule *) {
+    static tjs_error entryUpdateObjectCb(tTJSVariant *r, tjs_int n,
+                                         tTJSVariant **p, GLESModule *) {
+        if (n > 0 && p) {
+            iTJSDispatch2 *layer = FindLayerInParams(n, p);
+            if (layer) {
+                g_registeredLayer = layer;
+            }
+        }
         if (r) *r = true; return TJS_S_OK;
     }
 
@@ -679,7 +775,12 @@ public:
         if (r) *r = true; return TJS_S_OK;
     }
 
-    static tjs_error entryUpdateObjectCb(tTJSVariant *r, tjs_int, tTJSVariant **, GLESAdaptor *) {
+    static tjs_error entryUpdateObjectCb(tTJSVariant *r, tjs_int n,
+                                         tTJSVariant **p, GLESAdaptor *) {
+        if (n > 0 && p) {
+            iTJSDispatch2 *layer = FindLayerInParams(n, p);
+            if (layer) g_registeredLayer = layer;
+        }
         if (r) *r = true; return TJS_S_OK;
     }
 
