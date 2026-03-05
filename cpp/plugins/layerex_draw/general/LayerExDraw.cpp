@@ -811,10 +811,9 @@ bool Appearance::getLineCap(tTJSVariant &in, GpLineCap &cap,
 
 void LayerExDraw::updateRect(RectFClass &rect) {
     if(updateWhenDraw) {
-        // 更新処理
-        tTJSVariant vars[4] = { rect.X, rect.Y, rect.Width, rect.Height };
-        tTJSVariant *varsp[4] = { vars, vars + 1, vars + 2, vars + 3 };
-        _pUpdate(4, varsp);
+        tTVPRect rc((tjs_int)rect.X, (tjs_int)rect.Y,
+                    (tjs_int)(rect.X + rect.Width), (tjs_int)(rect.Y + rect.Height));
+        _this->Update(rc);
     }
 }
 
@@ -967,7 +966,7 @@ void LayerExDraw::clear(ARGB argb) {
     //        createRecord();
     //        GdipGraphicsClear(this->metaGraphics, argb);
     //    }
-    _pUpdate(0, nullptr);
+    layerExBase::redraw();
 }
 
 /**
@@ -1869,7 +1868,7 @@ bool LayerExDraw::redraw(ImageClass *image) {
         GdipSetWorldTransform(this->graphics,
                               static_cast<GpMatrix *>(calcTransform));
         delete bounds;
-        _pUpdate(0, nullptr);
+        layerExBase::redraw();
         return true;
     }
 
