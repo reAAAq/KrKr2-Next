@@ -190,6 +190,15 @@ class GameManager {
     }
   }
 
+  /// Set developer / producer name for a game (e.g. from scraping).
+  Future<void> setDeveloper(String path, String? developer) async {
+    final index = _games.indexWhere((g) => g.path == path);
+    if (index >= 0) {
+      _games[index].developer = developer;
+      await _save();
+    }
+  }
+
   List<String> _readSettledSessionIds(SharedPreferences prefs) {
     return List<String>.from(
       prefs.getStringList(PrefsKeys.settledPlaySessionIds) ?? const <String>[],

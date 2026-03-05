@@ -20,7 +20,7 @@ class VndbClient {
     final uri = Uri.parse('$_baseUrl/$_vnEndpoint');
     final body = jsonEncode({
       'filters': ['search', '=', keyword.trim()],
-      'fields': 'id,title,alttitle,image{url,thumbnail}',
+      'fields': 'id,title,alttitle,image{url,thumbnail},developers{name}',
       'results': _resultsLimit,
     });
 
@@ -62,10 +62,21 @@ class VndbClient {
           }
         }
 
+        String? developer;
+        final developers = item['developers'];
+        if (developers is List && developers.isNotEmpty) {
+          final first = developers.first;
+          if (first is Map<String, dynamic> && first['name'] is String) {
+            final name = (first['name'] as String).trim();
+            if (name.isNotEmpty) developer = name;
+          }
+        }
+
         list.add(GameMetadataCandidate(
           title: title,
           coverImageUrl: coverUrl,
           thumbnailUrl: thumbnailUrl,
+          developer: developer,
           sourceId: id,
           sourceLabel: 'VNDB',
         ));

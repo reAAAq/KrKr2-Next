@@ -92,6 +92,9 @@ class _ScrapeSelectPageState extends State<ScrapeSelectPage> {
     if (localPath != null) {
       await gameManager.setCoverImage(game.path, localPath);
     }
+    if (candidate.developer != null && candidate.developer!.isNotEmpty) {
+      await gameManager.setDeveloper(game.path, candidate.developer);
+    }
 
     if (!mounted) return;
     setState(() => _applying = false);
