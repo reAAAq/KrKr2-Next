@@ -434,6 +434,7 @@ public:
         }
 
         loaded_ = true;
+        EnsureBlitProgram();
         EnsureContinuousHook();
         spdlog::info("krkrlive2d: model loaded: {} ({} parts, {} drawables, {} textures, {} motions) "
                      "canvas={:.2f}x{:.2f} canvasPx={}x{} ppu={:.0f}",
@@ -450,7 +451,7 @@ public:
         return true;
     }
 
-    void ContinuousUpdate() {
+    void ContinuousUpdate(GLint savedFBO, const GLint savedVP[4]) {
         if (!loaded_ || !GetModel()) return;
 
         auto now = std::chrono::steady_clock::now();
@@ -471,11 +472,6 @@ public:
         GetModel()->SaveParameters();
         if (_eyeBlink) _eyeBlink->UpdateParameters(GetModel(), dt);
         GetModel()->Update();
-
-        GLint savedFBO = 0;
-        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &savedFBO);
-        GLint savedVP[4];
-        glGetIntegerv(GL_VIEWPORT, savedVP);
 
         GLsizei canvasW = static_cast<GLsizei>(GetModel()->GetCanvasWidthPixel());
         GLsizei canvasH = static_cast<GLsizei>(GetModel()->GetCanvasHeightPixel());
@@ -501,18 +497,14 @@ public:
         glViewport(savedVP[0], savedVP[1], savedVP[2], savedVP[3]);
     }
 
-    void BlitOverlay() {
+    void BlitOverlay(GLint curFBO, const GLint vp[4]) {
         if (!loaded_ || !internalFbo_ || !fboTex_) return;
-        GLint curFBO = 0;
-        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &curFBO);
-        GLint vp[4];
-        glGetIntegerv(GL_VIEWPORT, vp);
         BlitFBOToTarget(curFBO, vp[0], vp[1], vp[2], vp[3]);
     }
 
-    void UpdateAndDraw() {
+    void UpdateAndDraw(GLint savedFBO, const GLint savedVP[4]) {
         if (!loaded_ || !GetModel()) return;
-        ContinuousUpdate();
+        ContinuousUpdate(savedFBO, savedVP);
     }
 
     void UpdateProjection() {
@@ -595,10 +587,11 @@ private:
             "#version 100\n"
             "attribute vec2 a_pos;\n"
             "uniform vec2 u_scale;\n"
+            "uniform float u_flipY;\n"
             "varying vec2 v_uv;\n"
             "void main() {\n"
             "  gl_Position = vec4(a_pos * u_scale, 0.0, 1.0);\n"
-            "  v_uv = vec2(a_pos.x * 0.5 + 0.5, -a_pos.y * 0.5 + 0.5);\n"
+            "  v_uv = vec2(a_pos.x * 0.5 + 0.5, u_flipY * a_pos.y * 0.5 + 0.5);\n"
             "}\n";
         const char *fs =
             "#version 100\n"
@@ -622,6 +615,7 @@ private:
         locPos_   = glGetAttribLocation(blitProgram_, "a_pos");
         locTex_   = glGetUniformLocation(blitProgram_, "u_tex");
         locScale_ = glGetUniformLocation(blitProgram_, "u_scale");
+        locFlipY_ = glGetUniformLocation(blitProgram_, "u_flipY");
     }
 
     void BlitFBOToTarget(GLint targetFBO, GLint vpX, GLint vpY,
@@ -645,7 +639,11 @@ private:
         else if (modelAspect < vpAspect)
             sx = modelAspect / vpAspect;
         glUniform2f(locScale_, sx, sy);
-
+#if defined(__ANDROID__)
+        glUniform1f(locFlipY_, 1.0f);   // Android: flip Y so display is right-side up
+#else
+        glUniform1f(locFlipY_, -1.0f);  // Mac/desktop: keep current orientation
+#endif
         glEnable(GL_BLEND);
         glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
         glDisable(GL_DEPTH_TEST);
@@ -677,7 +675,7 @@ private:
     GLsizei fboW_ = 0;
     GLsizei fboH_ = 0;
     GLuint blitProgram_ = 0;
-    GLint locPos_ = 0, locTex_ = 0, locScale_ = 0;
+    GLint locPos_ = 0, locTex_ = 0, locScale_ = 0, locFlipY_ = -1;
     std::chrono::steady_clock::time_point lastUpdateTime_;
 };
 
@@ -691,14 +689,21 @@ public:
     void OnContinuousCallback(tjs_uint64 /*tick*/) override {
         bool anyActive = false;
         iTJSDispatch2 *layer = KrkrGLES_GetRegisteredLayer();
+
+        GLint savedFBO = 0;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &savedFBO);
+        GLint savedVP[4];
+        glGetIntegerv(GL_VIEWPORT, savedVP);
+
         for (auto *m : g_activeModels) {
             if (m && m->IsLoaded()) {
-                m->ContinuousUpdate();
+                m->ContinuousUpdate(savedFBO, savedVP);
                 anyActive = true;
                 if (layer && g_live2dRenderTarget.fbo) {
                     CopyFBOToLayer(g_live2dRenderTarget.fbo,
                                    g_live2dRenderTarget.width,
-                                   g_live2dRenderTarget.height, layer);
+                                   g_live2dRenderTarget.height, layer,
+                                   savedFBO);
                 }
             }
         }
@@ -714,9 +719,15 @@ static bool g_continuousHookRegistered = false;
 
 static void Live2DPostDrawHook() {
     if (KrkrGLES_GetRegisteredLayer()) return;
+
+    GLint curFBO = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &curFBO);
+    GLint vp[4];
+    glGetIntegerv(GL_VIEWPORT, vp);
+
     for (auto *m : g_activeModels) {
         if (m && m->IsLoaded()) {
-            m->BlitOverlay();
+            m->BlitOverlay(curFBO, vp);
         }
     }
 }
@@ -842,7 +853,11 @@ public:
 
     static tjs_error renderCb(tTJSVariant *r, tjs_int, tTJSVariant **, Live2DModel *s) {
         if (s && s->cubismModel_ && s->cubismModel_->IsLoaded()) {
-            s->cubismModel_->UpdateAndDraw();
+            GLint savedFBO = 0;
+            glGetIntegerv(GL_FRAMEBUFFER_BINDING, &savedFBO);
+            GLint savedVP[4];
+            glGetIntegerv(GL_VIEWPORT, savedVP);
+            s->cubismModel_->UpdateAndDraw(savedFBO, savedVP);
         }
         if (s) s->progress_ = 1.0;
         if (r) *r = true;
