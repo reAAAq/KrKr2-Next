@@ -143,5 +143,9 @@
   "scrapeMetadataCoverFailed": "名前を更新しました。カバーの取得に失敗しました。手動で設定できます。",
   "scrapeMetadataEnterName": "ゲーム名を入力してください。",
   "scrapeMetadataSourceError": "データソースが利用できません。しばらくしてから再試行してください。",
-  "scrapeMetadataSelectOne": "作品を選択してください。"
+  "scrapeMetadataSelectOne": "作品を選択してください。",
+
+  "scrapeAfterAddPrompt": "このゲームの情報を取得しますか？「はい」で検索して名前とカバーを設定します。",
+  "scrapeAfterAddNo": "いいえ",
+  "scrapeAfterAddYes": "はい"
 }

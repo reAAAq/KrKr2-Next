@@ -32,10 +32,13 @@ class GameDetailPage extends StatefulWidget {
     super.key,
     required this.game,
     required this.gameManager,
+    this.openScrapeOnLoad = false,
   });
 
   final GameInfo game;
   final GameManager gameManager;
+  /// When true, open the scrape dialog automatically after the first frame (e.g. after adding a game).
+  final bool openScrapeOnLoad;
 
   @override
   State<GameDetailPage> createState() => _GameDetailPageState();
@@ -46,6 +49,16 @@ class _GameDetailPageState extends State<GameDetailPage> {
   final GameMetadataScraper _scraper = GameMetadataScraper();
 
   GameInfo get game => widget.game;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.openScrapeOnLoad) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openScrape();
+      });
+    }
+  }
   GameManager get gm => widget.gameManager;
   bool get _isXp3 => game.path.toLowerCase().endsWith('.xp3');
   bool get _hasCover =>

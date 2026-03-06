@@ -389,4 +389,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get scrapeMetadataSelectOne => '请选择一项作品。';
+
+  @override
+  String get scrapeAfterAddPrompt => '是否刮削该游戏？选择「是」将搜索并填写名称与封面。';
+
+  @override
+  String get scrapeAfterAddNo => '否';
+
+  @override
+  String get scrapeAfterAddYes => '是';
 }

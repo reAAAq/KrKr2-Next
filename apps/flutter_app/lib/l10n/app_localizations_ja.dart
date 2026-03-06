@@ -391,4 +391,13 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get scrapeMetadataSelectOne => '作品を選択してください。';
+
+  @override
+  String get scrapeAfterAddPrompt => 'このゲームの情報を取得しますか？「はい」で検索して名前とカバーを設定します。';
+
+  @override
+  String get scrapeAfterAddNo => 'いいえ';
+
+  @override
+  String get scrapeAfterAddYes => 'はい';
 }

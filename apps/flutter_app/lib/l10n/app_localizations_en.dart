@@ -403,4 +403,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get scrapeMetadataSelectOne => 'Please select a game.';
+
+  @override
+  String get scrapeAfterAddPrompt =>
+      'Scrape this game? Choose Yes to search and fill in name and cover.';
+
+  @override
+  String get scrapeAfterAddNo => 'No';
+
+  @override
+  String get scrapeAfterAddYes => 'Yes';
 }

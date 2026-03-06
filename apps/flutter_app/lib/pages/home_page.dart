@@ -234,6 +234,7 @@ class _HomePageState extends State<HomePage> {
     if (mounted) {
       if (added) {
         setState(() {});
+        _offerScrapeAfterAdd(selectedDirectory);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -270,6 +271,7 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         if (added) {
           setState(() {});
+          _offerScrapeAfterAdd(realPath);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -309,17 +311,22 @@ class _HomePageState extends State<HomePage> {
     }
 
     int addedCount = 0;
+    String? lastAddedPath;
     for (final file in xp3Files) {
       final filePath = file.path;
       if (filePath == null) continue;
       final game = GameInfo(path: filePath);
       if (await _gameManager.addGame(game)) {
         addedCount++;
+        lastAddedPath = filePath;
       }
     }
     if (mounted) {
       if (addedCount > 0) {
         setState(() {});
+        if (addedCount == 1 && lastAddedPath != null) {
+          _offerScrapeAfterAdd(lastAddedPath!);
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -566,6 +573,44 @@ class _HomePageState extends State<HomePage> {
     if (result.shouldLaunch) _launchGame(game);
   }
 
+  /// After adding a game, offer to scrape. If user chooses Yes, open detail page with scrape dialog.
+  Future<void> _offerScrapeAfterAdd(String addedPath) async {
+    final l10n = AppLocalizations.of(context)!;
+    final idx = _gameManager.games.indexWhere((g) => g.path == addedPath);
+    if (idx < 0 || !mounted) return;
+    final game = _gameManager.games[idx];
+    final shouldScrape = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.scrapeMetadata),
+        content: Text(l10n.scrapeAfterAddPrompt),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.scrapeAfterAddNo),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.scrapeAfterAddYes),
+          ),
+        ],
+      ),
+    );
+    if (shouldScrape != true || !mounted) return;
+    final result = await Navigator.of(context).push<GameDetailResult>(
+      MaterialPageRoute<GameDetailResult>(
+        builder: (_) => GameDetailPage(
+          game: game,
+          gameManager: _gameManager,
+          openScrapeOnLoad: true,
+        ),
+      ),
+    );
+    if (result == null || !mounted) return;
+    if (result.needsRefresh) setState(() {});
+    if (result.shouldLaunch) _launchGame(game);
+  }
+
   Future<void> _packUnpackGame(GameInfo game) async {
     final l10n = AppLocalizations.of(context)!;
     final isXp3 = game.path.toLowerCase().endsWith('.xp3');
@@ -630,6 +675,7 @@ class _HomePageState extends State<HomePage> {
                 behavior: SnackBarBehavior.floating,
               ),
             );
+            if (added) _offerScrapeAfterAdd(destDir);
           }
         }
       } else {
@@ -654,6 +700,7 @@ class _HomePageState extends State<HomePage> {
                 behavior: SnackBarBehavior.floating,
               ),
             );
+            if (added) _offerScrapeAfterAdd(xp3Path);
           }
         }
       }

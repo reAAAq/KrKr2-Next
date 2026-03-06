@@ -143,5 +143,9 @@
   "scrapeMetadataCoverFailed": "名称已更新，封面获取失败可手动设置。",
   "scrapeMetadataEnterName": "请输入游戏名称。",
   "scrapeMetadataSourceError": "数据源暂时不可用，请稍后重试。",
-  "scrapeMetadataSelectOne": "请选择一项作品。"
+  "scrapeMetadataSelectOne": "请选择一项作品。",
+
+  "scrapeAfterAddPrompt": "是否刮削该游戏？选择「是」将搜索并填写名称与封面。",
+  "scrapeAfterAddNo": "否",
+  "scrapeAfterAddYes": "是"
 }

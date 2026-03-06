@@ -825,6 +825,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Please select a game.'**
   String get scrapeMetadataSelectOne;
+
+  /// No description provided for @scrapeAfterAddPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Scrape this game? Choose Yes to search and fill in name and cover.'**
+  String get scrapeAfterAddPrompt;
+
+  /// No description provided for @scrapeAfterAddNo.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get scrapeAfterAddNo;
+
+  /// No description provided for @scrapeAfterAddYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get scrapeAfterAddYes;
 }
 
 class _AppLocalizationsDelegate

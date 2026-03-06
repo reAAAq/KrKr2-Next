@@ -183,5 +183,9 @@
   "scrapeMetadataCoverFailed": "Name updated. Cover failed; you can set it manually.",
   "scrapeMetadataEnterName": "Please enter a game name.",
   "scrapeMetadataSourceError": "Source unavailable. Try again later.",
-  "scrapeMetadataSelectOne": "Please select a game."
+  "scrapeMetadataSelectOne": "Please select a game.",
+
+  "scrapeAfterAddPrompt": "Scrape this game? Choose Yes to search and fill in name and cover.",
+  "scrapeAfterAddNo": "No",
+  "scrapeAfterAddYes": "Yes"
 }
