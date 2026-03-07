@@ -9,8 +9,14 @@
 
 #include "ncbind.hpp"
 #include "FreeTypeFontRasterizer.h"
+#include "RectItf.h"
 #include "tvpfontstruc.h"
+#include "WindowIntf.h"
+#include "krkr_egl_context.h"
 
+#include <algorithm>
+#include <cmath>
+#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
@@ -228,6 +234,11 @@ public:
   tTJSVariant renderDelay();
   int calcShowCount(int elapsed);
   tTJSVariant renderText(tTJSString text);
+  void resetStyle();
+  void resetFont();
+  bool renderOver() const { return m_overflow; }
+  void setFontScale(double v) { set_fontScale(v); }
+  tTJSVariant getRect();
 
   property_accessor(vertical, bool, m_vertical);
   property_accessor(bold, bool, m_state.bold);
@@ -260,8 +271,27 @@ public:
 
   double get_fontScale() const { return m_fontScale; }
   void set_fontScale(double v) { m_fontScale = v; }
+  int get_renderLeft() const { return getRenderedBounds().left; }
+  int get_renderTop() const { return getRenderedBounds().top; }
+  int get_renderWidth() const {
+    const auto bounds = getRenderedBounds();
+    return bounds.right - bounds.left;
+  }
+  int get_renderHeight() const {
+    const auto bounds = getRenderedBounds();
+    return bounds.bottom - bounds.top;
+  }
+  int get_renderRight() const { return getRenderedBounds().right; }
+  int get_renderBottom() const { return getRenderedBounds().bottom; }
 
 private:
+  struct RenderBounds {
+    int left;
+    int top;
+    int right;
+    int bottom;
+  };
+
   FontRasterizer *m_rasterizer;
   int m_cachedAscentHeight = 0;
   bool m_fontDirty = true;
@@ -290,7 +320,11 @@ private:
   void performLinebreak();
   void flush(bool force = false);
   void applyFont();
+  double getRequestedFontScale() const;
+  double getEffectiveFontScale() const;
+  int getEffectiveLineSpacing() const;
   int getAscentHeight();
+  RenderBounds getRenderedBounds() const;
 };
 
 enum TextRenderMode {
@@ -325,13 +359,70 @@ void TextRenderBase::applyFont() {
   m_fontDirty = false;
 
   tTVPFont font;
-  font.Height = m_state.fontSize;
+  font.Height = static_cast<tjs_int>(
+      std::lround(m_state.fontSize * getEffectiveFontScale()));
   font.Flags = static_cast<tjs_uint32>(
       (m_state.bold ? TVP_TF_BOLD : 0) | (m_state.italic ? TVP_TF_ITALIC : 0));
   font.Angle = 0;
   font.Face = ttstr(m_state.face.c_str());
   m_rasterizer->ApplyFont(font);
   m_cachedAscentHeight = m_rasterizer->GetAscentHeight();
+}
+
+double TextRenderBase::getEffectiveFontScale() const {
+  double scale = getRequestedFontScale();
+
+  auto *window = TVPMainWindow;
+  if (!window) return scale;
+
+  tjs_int srcW = window->GetWidth();
+  tjs_int srcH = window->GetHeight();
+  if (srcW <= 0 || srcH <= 0) {
+    auto *drawDevice = window->GetDrawDevice();
+    if (!drawDevice) return scale;
+    drawDevice->GetSrcSize(srcW, srcH);
+    if (srcW <= 0 || srcH <= 0) return scale;
+  }
+
+  auto &egl = krkr::GetEngineEGLContext();
+  uint32_t fbW = 0;
+  uint32_t fbH = 0;
+  if (egl.HasIOSurface()) {
+    fbW = egl.GetIOSurfaceWidth();
+    fbH = egl.GetIOSurfaceHeight();
+  } else if (egl.HasNativeWindow()) {
+    fbW = egl.GetNativeWindowWidth();
+    fbH = egl.GetNativeWindowHeight();
+  } else if (egl.IsValid()) {
+    fbW = egl.GetWidth();
+    fbH = egl.GetHeight();
+  }
+
+  if (fbW == 0 || fbH == 0) return scale;
+
+  const double autoScale =
+      std::clamp(std::max(static_cast<double>(srcW) / static_cast<double>(fbW),
+                          static_cast<double>(srcH) / static_cast<double>(fbH)),
+                 1.0, 2.0);
+  return scale * autoScale;
+}
+
+double TextRenderBase::getRequestedFontScale() const {
+  if (m_fontScale >= 1.0) return m_fontScale;
+
+  const bool looksLikeMainMessageBox =
+      m_boxWidth >= 900 && m_boxHeight >= 120 && m_state.fontSize >= 20;
+  if (looksLikeMainMessageBox) return 1.0;
+
+  return m_fontScale;
+}
+
+int TextRenderBase::getEffectiveLineSpacing() const {
+  return static_cast<int>(std::lround(
+      static_cast<double>(m_state.lineSpacing) *
+      std::max(getEffectiveFontScale() /
+                   std::max(getRequestedFontScale(), 0.001),
+               1.0)));
 }
 
 int TextRenderBase::getAscentHeight() {
@@ -477,7 +568,7 @@ bool TextRenderBase::render(tTJSString text, int autoIndent, int diff, int all, 
 void TextRenderBase::performLinebreak() {
   m_x = m_indent;
   m_isBeginningOfLine = true;
-  m_y += getAscentHeight() + m_state.lineSpacing;
+  m_y += getAscentHeight() + getEffectiveLineSpacing();
 }
 
 void TextRenderBase::pushGraphicalCharacter(const tjs_ustring &) {
@@ -612,6 +703,19 @@ void TextRenderBase::done() {
   flush();
 }
 
+void TextRenderBase::resetStyle() {
+  m_state = m_default;
+  m_fontDirty = true;
+}
+
+void TextRenderBase::resetFont() {
+  m_state.bold = m_default.bold;
+  m_state.italic = m_default.italic;
+  m_state.face = m_default.face;
+  m_state.fontSize = m_default.fontSize;
+  m_fontDirty = true;
+}
+
 tTJSVariant TextRenderBase::getKeyWait() {
   auto array = TJSCreateArrayObject();
   auto res = tTJSVariant(array, array);
@@ -637,6 +741,46 @@ tTJSVariant TextRenderBase::renderText(tTJSString text) {
   return getCharacters(0, 0);
 }
 
+TextRenderBase::RenderBounds TextRenderBase::getRenderedBounds() const {
+  RenderBounds bounds{0, 0, 0, 0};
+  bool hasCharacter = false;
+
+  auto accumulate = [&](const CharacterInfo &character) {
+    const int left = character.x;
+    const int top = character.y;
+    const int right = character.x + std::max(character.cw, 0);
+    const int bottom = character.y + std::max(character.size, 0);
+    if (!hasCharacter) {
+      bounds = {left, top, right, bottom};
+      hasCharacter = true;
+      return;
+    }
+    bounds.left = std::min(bounds.left, left);
+    bounds.top = std::min(bounds.top, top);
+    bounds.right = std::max(bounds.right, right);
+    bounds.bottom = std::max(bounds.bottom, bottom);
+  };
+
+  for (const auto &character : m_characters) accumulate(character);
+  for (const auto &character : m_buffer) accumulate(character);
+
+  if (!hasCharacter) {
+    bounds.right = std::max(m_boxWidth, 0);
+    bounds.bottom = std::max(m_boxHeight, 0);
+  }
+
+  return bounds;
+}
+
+tTJSVariant TextRenderBase::getRect() {
+  const auto bounds = getRenderedBounds();
+  iTJSDispatch2 *rect = TVPCreateRectObject(bounds.left, bounds.top,
+                                            bounds.right, bounds.bottom);
+  tTJSVariant result(rect, rect);
+  rect->Release();
+  return result;
+}
+
 NCB_REGISTER_CLASS(TextRenderBase) {
   Constructor();
 
@@ -652,6 +796,11 @@ NCB_REGISTER_CLASS(TextRenderBase) {
   NCB_METHOD(renderDelay);
   NCB_METHOD(calcShowCount);
   NCB_METHOD(renderText);
+  NCB_METHOD(resetStyle);
+  NCB_METHOD(resetFont);
+  NCB_METHOD(renderOver);
+  NCB_METHOD(setFontScale);
+  NCB_METHOD(getRect);
 
   property_delegate(vertical);
   property_delegate(bold);
@@ -683,4 +832,10 @@ NCB_REGISTER_CLASS(TextRenderBase) {
   property_delegate(defaultLineSize);
 
   NCB_PROPERTY(fontScale, get_fontScale, set_fontScale);
+  NCB_PROPERTY_RO(renderLeft, get_renderLeft);
+  NCB_PROPERTY_RO(renderTop, get_renderTop);
+  NCB_PROPERTY_RO(renderWidth, get_renderWidth);
+  NCB_PROPERTY_RO(renderHeight, get_renderHeight);
+  NCB_PROPERTY_RO(renderRight, get_renderRight);
+  NCB_PROPERTY_RO(renderBottom, get_renderBottom);
 };

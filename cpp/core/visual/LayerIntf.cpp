@@ -11306,6 +11306,13 @@ TJS_BEGIN_NATIVE_METHOD_DECL(invalidateGLTextureCache) {
 }
 TJS_END_NATIVE_METHOD_DECL(invalidateGLTextureCache)
 //----------------------------------------------------------------------
+TJS_BEGIN_NATIVE_METHOD_DECL(resetStyle) {
+    TJS_GET_NATIVE_INSTANCE(_this, tTJSNI_Layer);
+    if (result) result->Clear();
+    return TJS_S_OK;
+}
+TJS_END_NATIVE_METHOD_DECL(resetStyle)
+//----------------------------------------------------------------------
 TJS_END_NATIVE_MEMBERS
 }
 //---------------------------------------------------------------------------
