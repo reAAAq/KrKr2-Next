@@ -41,11 +41,38 @@ fi
 
 BUILD_TYPE_CAP="$(echo "${BUILD_TYPE_LOWER:0:1}" | tr '[:lower:]' '[:upper:]')${BUILD_TYPE_LOWER:1}"
 
-FLUTTER_SDK="$PROJECT_ROOT/.devtools/flutter"
-FLUTTER_BIN="$FLUTTER_SDK/bin/flutter"
+if [[ -d "$PROJECT_ROOT/.devtools/flutter" ]]; then
+    FLUTTER_SDK="$PROJECT_ROOT/.devtools/flutter"
+    FLUTTER_BIN="$FLUTTER_SDK/bin/flutter"
+elif command -v flutter >/dev/null 2>&1; then
+    FLUTTER_BIN="$(command -v flutter)"
+    if command -v realpath >/dev/null 2>&1; then
+        RESOLVED_BIN="$(realpath "$FLUTTER_BIN")"
+    elif command -v python3 >/dev/null 2>&1; then
+        RESOLVED_BIN="$(python3 -c "import os, sys; print(os.path.realpath(sys.argv[1]))" "$FLUTTER_BIN")"
+    else
+        RESOLVED_BIN="$FLUTTER_BIN"
+    fi
+    FLUTTER_SDK="$(dirname "$(dirname "$RESOLVED_BIN")")"
+else
+    echo "Error: Flutter SDK not found in .devtools and not in PATH."
+    exit 1
+fi
+
 FLUTTER_APP_DIR="$PROJECT_ROOT/apps/flutter_app"
 
-VCPKG_ROOT="$PROJECT_ROOT/.devtools/vcpkg"
+if [[ -d "$PROJECT_ROOT/.devtools/vcpkg/.git" ]]; then
+    VCPKG_ROOT="$PROJECT_ROOT/.devtools/vcpkg"
+elif [[ -n "${VCPKG_ROOT:-}" && -f "$VCPKG_ROOT/.vcpkg-root" ]]; then
+    :
+else
+    echo "[INFO] vcpkg not found. Automatically setting up vcpkg in .devtools/vcpkg..."
+    mkdir -p "$PROJECT_ROOT/.devtools"
+    git clone https://github.com/microsoft/vcpkg.git "$PROJECT_ROOT/.devtools/vcpkg"
+    (cd "$PROJECT_ROOT/.devtools/vcpkg" && ./bootstrap-vcpkg.sh -disableMetrics)
+    VCPKG_ROOT="$PROJECT_ROOT/.devtools/vcpkg"
+fi
+
 VCPKG_BIN="$VCPKG_ROOT/vcpkg"
 
 # Android SDK/NDK paths (auto-detect common locations)
