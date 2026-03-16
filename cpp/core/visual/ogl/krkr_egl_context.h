@@ -151,9 +151,7 @@ namespace krkr {
 
         /**
          * @return true if an IOSurface is currently attached as render target.
-
-         * *         若当前已附加 IOSurface 作为渲染目标，则返回 true。
-
+         *         若当前已附加 IOSurface 作为渲染目标，则返回 true。
          */
         bool HasIOSurface() const { return iosurface_fbo_ != 0; }
 
