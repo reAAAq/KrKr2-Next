@@ -932,8 +932,15 @@ namespace TJS {
 #ifdef TJS_VM_THREADED_CODE
             {
             // Direct threaded dispatch table - one entry per VM opcode
-            // 直接线程化分派表 - 每个 VM 操作码对应一个条目
-            static const void *dispatch_table[__VM_LAST + 1] = {
+            // void* const (not const void*): goto* requires a non-const pointer;
+            // 'const' here makes each pointer in the table immutable (write-once),
+            // not the pointed-to label. GCC/Clang &&label yields void*, so the
+            // array element type must be void* (or compatible), not const void*.
+            // void* const（非 const void*）：goto* 要求非 const 指针；
+            // 此处 const 修饰数组中每个指针本身（表初始化后不可修改），
+            // 而非指向的标签地址。GCC/Clang 的 &&label 返回 void*，
+            // 因此数组元素类型必须为 void*，不能是 const void*。
+            static void * const dispatch_table[__VM_LAST + 1] = {
                 &&L_VM_NOP,       &&L_VM_CONST,     &&L_VM_CP,
                 &&L_VM_CL,        &&L_VM_CCL,       &&L_VM_TT,
                 &&L_VM_TF,        &&L_VM_CEQ,       &&L_VM_CDEQ,
