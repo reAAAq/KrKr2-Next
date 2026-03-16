@@ -69,10 +69,11 @@
 |--------|------|------|
 | P0 | 像素混合 SIMD 化 ([Highway](https://github.com/google/highway)) | ✅ 完成 |
 | P0 | 全 GPU 合成渲染管线 | 🔨 进行中 |
-| P0 | TJS2 VM 解释器优化 (computed goto) | 📋 计划中 |
+| P0 | TJS2 VM 解释器优化 (computed goto) | ✅ 完成 |
 
 ## 近期小更新 / Recent Updates
 
+- **TJS2 VM 解释器 computed goto 优化**：在 GCC/Clang 平台上使用直接线程化分派（labels-as-values）替代传统 switch-case，消除中央分支瓶颈，每个操作码拥有独立的间接跳转，CPU 分支预测器可以学习逐操作码的跳转模式，预计提升 15-25% 脚本执行性能。MSVC 自动回退到原 switch-case 路径，零兼容性风险。
 - 完成了一批围绕 Flutter 宿主路径的低风险打磨工作。
 - 补全了键盘修饰键与 BMP 文本输入到 `engine_api` 的转发。
 - 扩展了游戏内调试面板，增加 backend description、renderer info、present path 以及 surface/frame size summary。

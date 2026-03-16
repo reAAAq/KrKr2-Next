@@ -69,10 +69,11 @@ The screenshot below shows the current running state on macOS with the Metal bac
 |----------|------|--------|
 | P0 | Pixel Blend SIMD ([Highway](https://github.com/google/highway)) | ✅ Done |
 | P0 | Full GPU Compositing Pipeline | 🔨 In Progress |
-| P0 | TJS2 VM Interpreter (computed goto) | 📋 Planned |
+| P0 | TJS2 VM Interpreter (computed goto) | ✅ Done |
 
 ## Recent Updates
 
+- **TJS2 VM computed goto optimization**: On GCC/Clang platforms, replaced the traditional switch-case dispatch with direct threaded dispatch (labels-as-values). Eliminates the central branch bottleneck — each opcode gets its own indirect jump, allowing the CPU branch predictor to learn per-opcode jump patterns. Expected 15-25% script execution speedup. MSVC automatically falls back to the original switch-case path with zero compatibility risk.
 - Completed low-risk launcher/runtime polish around the Flutter host path.
 - Added keyboard modifier forwarding and BMP text input forwarding on the Flutter engine surface.
 - Expanded the in-game debug panel with backend description, renderer info, active present path, and surface/frame size summary.
