@@ -50,6 +50,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     uchardet::libuchardet
     unrar::unrar
     LibArchive::LibArchive
+    ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib/libb2.a
     LibXml2::LibXml2
     zstd::libzstd
 
