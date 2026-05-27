@@ -45,6 +45,9 @@ extern void TVPMainWindowClosed(); // called from WindowIntf.cpp,
 extern bool TVPSystemUninitCalled;
 // whether TVPSystemUninit is called or not
 
+extern void TVPResetRuntimeForRestart();
+// reset internal state to allow re-initialization after engine_destroy
+
 //---------------------------------------------------------------------------
 
 //---------------------------------------------------------------------------

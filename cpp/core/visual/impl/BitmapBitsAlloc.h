@@ -33,6 +33,7 @@ class tTVPBitmapBitsAlloc {
 
 public:
     static void FreeAllocator();
+    static void ResetForRestart();
     static void *Alloc(tjs_uint size, tjs_uint width, tjs_uint height);
     static void Free(void *ptr);
 };

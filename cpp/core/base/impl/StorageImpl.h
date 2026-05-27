@@ -187,4 +187,6 @@ void TVPListDir(const std::string &folder,
 bool TVPSaveStreamToFile(tTJSBinaryStream *st, tjs_uint64 offset,
                          tjs_uint64 size, const ttstr &outpath);
 
+void TVPResetStorageImplForRestart();
+
 #endif

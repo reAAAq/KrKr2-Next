@@ -9,6 +9,7 @@
 
 #include "EngineLoop.h"
 
+#include <cstring>
 #include <spdlog/spdlog.h>
 
 #include "Application.h"
@@ -86,6 +87,9 @@ EngineLoop::~EngineLoop() {
     if (s_instance == this) {
         s_instance = nullptr;
     }
+    // Reset static state so next EngineLoop instance starts clean
+    s_postUpdate = nullptr;
+    std::memset(s_scancode, 0, sizeof(s_scancode));
 }
 
 EngineLoop* EngineLoop::GetInstance() {

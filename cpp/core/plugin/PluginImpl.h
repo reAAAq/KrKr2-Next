@@ -182,5 +182,7 @@ TJS_EXP_FUNC_DEF(void, TVPDoTryBlock,
 extern bool TVPPluginUnloadedAtSystemExit;
 
 void tvpLoadPlugins();
+void TVPUnregisterInternalPluginsForRestart();
+void TVPResetPluginSystemForRestart();
 
 #endif

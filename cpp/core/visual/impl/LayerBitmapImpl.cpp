@@ -87,6 +87,7 @@ void TVPUninitializeFontRasterizers() {
         delete TVPFontSystem;
         TVPFontSystem = nullptr;
     }
+    TVPFontRasterizersInit = false;
 }
 static tTVPAtExit TVPUninitializeFontRaster(TVP_ATEXIT_PRI_RELEASE,
                                             TVPUninitializeFontRasterizers);
@@ -239,6 +240,18 @@ struct tTVPClearFontCacheCallback : public tTVPCompactEventCallbackIntf {
     }
 } static TVPClearFontCacheCallback;
 static bool TVPClearFontCacheCallbackInit = false;
+
+void TVPResetLayerBitmapImplForRestart() {
+    TVPUninitializeFontRasterizers();
+    TVPCurrentFontRasterizers = FONT_RASTER_FREE_TYPE;
+    TVPGlobalFontStateMagic = 0;
+
+    TVPClearFontCache();
+    TVPClearFontCacheCallbackInit = false;
+
+    TVPUnmapAllPrerenderedFonts();
+    TVPPrerenderedFonts.Clear();
+}
 //---------------------------------------------------------------------------
 static tTVPCharacterData *TVPGetCharacter(const tTVPFontAndCharacterData &font,
                                           tTVPNativeBaseBitmap *bmp,

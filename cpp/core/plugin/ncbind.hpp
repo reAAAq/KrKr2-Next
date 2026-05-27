@@ -2123,8 +2123,9 @@ struct ncbAutoRegister {
 			p->Unregist();
 	}
 
-	static void AllRegist()   { for (int line = 0; line < LINE_COUNT; line++) AllRegist(  static_cast<LineT>(line)); }
+	static void AllRegist()   { _internal_plugins.clear(); for (int line = 0; line < LINE_COUNT; line++) AllRegist(  static_cast<LineT>(line)); }
 	static void AllUnregist() { for (int line = 0; line < LINE_COUNT; line++) AllUnregist(static_cast<LineT>(line)); }
+	static void ResetModuleStateForRestart();
 	static bool LoadModule(const ttstr &_name);
 	static bool HasModule(const ttstr &_name);
 	static void LoadAllModules();

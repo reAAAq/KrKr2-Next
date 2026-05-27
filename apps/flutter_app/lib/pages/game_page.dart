@@ -94,6 +94,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   final Stopwatch _playStopwatch = Stopwatch();
   int? _playRunningSinceEpochMs;
   bool _playSessionFinalized = false;
+  bool _shutdownRequested = false;
+  Future<void>? _shutdownFuture;
 
   @override
   void initState() {
@@ -189,17 +191,87 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     }
   }
 
-  @override
-  void dispose() {
-    if (widget.gameManager != null) {
-      unawaited(_finalizePlaySession());
+  Future<void> _shutdownEngine({
+    bool restoreOrientation = true,
+    bool finalizePlaySession = true,
+  }) {
+    final existing = _shutdownFuture;
+    if (existing != null) {
+      return existing;
     }
+
+    _shutdownRequested = true;
+    final future = _performShutdownEngine(
+      restoreOrientation: restoreOrientation,
+      finalizePlaySession: finalizePlaySession,
+    );
+    _shutdownFuture = future;
+    return future;
+  }
+
+  Future<void> _performShutdownEngine({
+    required bool restoreOrientation,
+    required bool finalizePlaySession,
+  }) async {
     _stopStartupPolling();
     _stopMemoryStatsPolling();
+    _stopTickLoop(notify: false);
+    _autoPausedByLifecycle = false;
+    _resumeTickAfterLifecycle = false;
+    _pendingLifecycleResumed = false;
+    _lifecycleTransitionInFlight = false;
+
+    try {
+      await _surfaceKey.currentState?.release();
+    } catch (e) {
+      _log('surface release failed: $e');
+    }
+
+    final int destroyResult = await _bridge.engineDestroy();
+    if (destroyResult != _engineResultOk) {
+      _log(
+        'engine_destroy failed: result=$destroyResult, '
+        'error=${_bridge.engineGetLastError()}',
+      );
+    } else {
+      _log('engine_destroy => OK');
+    }
+
+    if (finalizePlaySession && widget.gameManager != null) {
+      await _finalizePlaySession();
+    }
+
+    if (restoreOrientation) {
+      _restoreOrientation();
+    }
+  }
+
+  Future<void> _retryAutoStart() async {
+    await _shutdownEngine();
+    if (!mounted) {
+      return;
+    }
+
+    _shutdownRequested = false;
+    _shutdownFuture = null;
+    setState(() {
+      _phase = _EnginePhase.initializing;
+      _errorMessage = null;
+      _tickCount = 0;
+      _showOverlay = false;
+      _showDebug = false;
+    });
+    _bridge = widget.engineBridgeBuilder(ffiLibraryPath: widget.ffiLibraryPath);
+    unawaited(_autoStart());
+  }
+
+  @override
+  void dispose() {
+    unawaited(
+      _shutdownEngine(restoreOrientation: false, finalizePlaySession: true),
+    );
     _bootLogScrollController.dispose();
     WidgetsBinding.instance.removeObserver(this);
-    _stopTickLoop(notify: false);
-    unawaited(_bridge.engineDestroy());
     _restoreOrientation();
     super.dispose();
   }
@@ -346,6 +418,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   }
 
   Future<void> _autoStart() async {
+    if (_shutdownRequested) {
+      return;
+    }
     if (Platform.isAndroid) {
       final granted = await _ensureAndroidAllFilesAccess();
       if (!granted) {
@@ -365,6 +440,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     await Future<void>.delayed(Duration.zero);
 
     final int createResult = await _bridge.engineCreate();
+    if (_shutdownRequested) {
+      return;
+    }
     if (createResult != _engineResultOk) {
       _fail(
         'engine_create failed: result=$createResult, '
@@ -397,7 +475,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
     await _applyMemoryGovernorOptions();
 
-    if (!mounted) return;
+    if (!mounted || _shutdownRequested) return;
     setState(() => _phase = _EnginePhase.opening);
     _stopStartupPolling();
     var normalizedGamePath = _normalizeGamePath(widget.gamePath);
@@ -419,6 +497,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     final int openResult = await _bridge.engineOpenGameAsync(
       normalizedGamePath,
     );
+    if (_shutdownRequested) {
+      return;
+    }
     if (openResult != _engineResultOk) {
       _fail(
         'engine_open_game_async failed: result=$openResult, '
@@ -497,7 +578,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
           final error = _bridge.engineGetLastError();
           _log('Tick ended: result=$result, error=$error');
           if (error.contains('termination') || error.contains('terminated')) {
-            _exitGame();
+            unawaited(_exitGame());
             return;
           }
           setState(() {
@@ -672,7 +753,10 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       _pendingLifecycleResumed = false;
       return;
     }
-    if (!mounted || _autoPausedByLifecycle || _phase != _EnginePhase.running) {
+    if (!mounted ||
+        _shutdownRequested ||
+        _autoPausedByLifecycle ||
+        _phase != _EnginePhase.running) {
       return;
     }
     _lifecycleTransitionInFlight = true;
@@ -706,7 +790,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       _pendingLifecycleResumed = true;
       return;
     }
-    if (!mounted || !_autoPausedByLifecycle) {
+    if (!mounted || _shutdownRequested || !_autoPausedByLifecycle) {
       return;
     }
     _lifecycleTransitionInFlight = true;
@@ -846,9 +930,20 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     setState(() => _showDebug = !_showDebug);
   }
 
-  void _exitGame() {
-    _stopTickLoop(notify: false);
-    _restoreOrientation();
+  Future<void> _exitGame() async {
+    if (_shutdownRequested) {
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _showOverlay = false;
+        _showDebug = false;
+      });
+    }
+    await _shutdownEngine();
+    if (!mounted) {
+      return;
+    }
     Navigator.of(context).pop();
   }
 
@@ -1082,7 +1177,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                   ),
                   const Spacer(),
                   GestureDetector(
-                    onTap: _exitGame,
+                    onTap: () => unawaited(_exitGame()),
                     child: Text(
                       'Cancel',
                       style: TextStyle(
@@ -1141,7 +1236,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
               mainAxisSize: MainAxisSize.min,
               children: [
                 OutlinedButton.icon(
-                  onPressed: _exitGame,
+                  onPressed: () => unawaited(_exitGame()),
                   icon: const Icon(Icons.arrow_back),
                   label: const Text('Back'),
                   style: OutlinedButton.styleFrom(
@@ -1151,18 +1246,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                 ),
                 const SizedBox(width: 16),
                 FilledButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _phase = _EnginePhase.initializing;
-                      _errorMessage = null;
-                      _tickCount = 0;
-                    });
-                    unawaited(_bridge.engineDestroy());
-                    _bridge = widget.engineBridgeBuilder(
-                      ffiLibraryPath: widget.ffiLibraryPath,
-                    );
-                    unawaited(_autoStart());
-                  },
+                  onPressed: () => unawaited(_retryAutoStart()),
                   icon: const Icon(Icons.refresh),
                   label: const Text('Retry'),
                 ),
@@ -1214,7 +1298,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                 _overlayItem(
                   icon: Icons.exit_to_app,
                   label: 'Exit Game',
-                  onTap: _exitGame,
+                  onTap: () => unawaited(_exitGame()),
                   destructive: true,
                 ),
               ],

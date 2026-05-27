@@ -90,6 +90,13 @@ void InvalidateStateCache();
 void OnRendererRecreated(std::function<void()> callback);
 
 /**
+ * Clear all registered renderer-recreated callbacks.
+ * Used during engine restart to discard callbacks bound to the
+ * previous render manager instance.
+ */
+void ClearRendererRecreatedCallbacks();
+
+/**
  * Fire the renderer-recreated event. Called by the platform layer
  * when the GL context has been recreated.
  */

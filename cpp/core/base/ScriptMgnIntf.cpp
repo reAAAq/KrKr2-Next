@@ -17,6 +17,7 @@
 #include "ScriptMgnIntf.h"
 #include "StorageIntf.h"
 #include "DebugIntf.h"
+#include <spdlog/spdlog.h>
 #include "WindowIntf.h"
 #include "LayerIntf.h"
 #include "CDDAIntf.h"
@@ -582,6 +583,18 @@ void TVPRestartScriptEngine() {
     TVPUninitScriptEngine();
     TVPScriptEngineInit = false;
     TVPInitScriptEngine();
+}
+//---------------------------------------------------------------------------
+
+//---------------------------------------------------------------------------
+// TVPResetScriptEngineForRestart
+//---------------------------------------------------------------------------
+void TVPResetScriptEngineForRestart() {
+    // After TVPUninitScriptEngine has already been called (via Application::OnExit
+    // or TVPSystemUninit), reset the guard variables so the script engine can be
+    // re-initialized on the next engine_open_game cycle.
+    TVPScriptEngineInit = false;
+    TVPScriptEngineUninit = false;
 }
 //---------------------------------------------------------------------------
 

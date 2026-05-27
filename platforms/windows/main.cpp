@@ -7,6 +7,7 @@
 #include <boost/locale.hpp>
 
 #include "tjsString.h"
+#include "utils/LogSetup.h"
 #include "environ/cocos2d/AppDelegate.h"
 
 #include "environ/ui/MainFileSelectorForm.h"
@@ -21,6 +22,18 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     int argc = 0;
     LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
 
+    spdlog::set_level(spdlog::level::debug);
+
+    static auto core_logger = spdlog::stdout_color_mt("core");
+    static auto tjs2_logger = spdlog::stdout_color_mt("tjs2");
+    static auto plugin_logger = spdlog::stdout_color_mt("plugin");
+
+    TVPConfigureLoggerPattern(core_logger);
+    TVPConfigureLoggerPattern(tjs2_logger);
+    TVPConfigureLoggerPattern(plugin_logger);
+
+    spdlog::set_default_logger(core_logger);
+
     if(argc > 1) {
         std::wstring xp3Path = argv[1];
         std::string xp3PathUtf8 =
@@ -30,14 +43,6 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     }
 
     LocalFree(argv);
-
-    spdlog::set_level(spdlog::level::debug);
-
-    static auto core_logger = spdlog::stdout_color_mt("core");
-    static auto tjs2_logger = spdlog::stdout_color_mt("tjs2");
-    static auto plugin_logger = spdlog::stdout_color_mt("plugin");
-
-    spdlog::set_default_logger(core_logger);
 
     static auto pAppDelegate = std::make_unique<TVPAppDelegate>();
     return pAppDelegate->run();

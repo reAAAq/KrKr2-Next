@@ -24,6 +24,7 @@
 #include "UserEvent.h"
 #include "Application.h"
 #include "Platform.h"
+#include <spdlog/spdlog.h>
 #include "TickCount.h"
 #include "Random.h"
 #include "RenderManager.h"

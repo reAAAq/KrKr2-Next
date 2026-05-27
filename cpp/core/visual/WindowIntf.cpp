@@ -75,6 +75,11 @@ void TVPClearAllWindowInputEvents() {
         (*i)->ClearInputEvents();
     }
 }
+
+void TVPResetWindowListForRestart() {
+    TVPMainWindow = nullptr;
+    TVPWindowVector.clear();
+}
 //---------------------------------------------------------------------------
 
 #if 0

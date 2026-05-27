@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'config/stats_base_url.dart' if (dart.library.io) 'config/stats_base_url_io.dart';
+import 'config/stats_base_url.dart'
+    if (dart.library.io) 'config/stats_base_url_io.dart';
 import 'l10n/app_localizations.dart';
 import 'pages/home_page.dart';
 import 'services/first_open_analytics.dart';
+import 'services/launch_args_service.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  FirstOpenAnalytics.reportIfNeeded(
-    baseUrl: statsBaseUrl,
-    version: '1.0.0',
-  );
-  runApp(const Krkr2App());
+  final initialGamePath = await LaunchArgsService.getInitialGamePath();
+  FirstOpenAnalytics.reportIfNeeded(baseUrl: statsBaseUrl, version: '1.0.0');
+  runApp(Krkr2App(initialGamePath: initialGamePath));
 }
 
 class Krkr2App extends StatefulWidget {
-  const Krkr2App({super.key});
+  const Krkr2App({super.key, this.initialGamePath});
+
+  final String? initialGamePath;
 
   /// Change the app locale at runtime. Pass null to follow system default.
   static void setLocale(BuildContext context, Locale? locale) {
@@ -115,7 +117,7 @@ class _Krkr2AppState extends State<Krkr2App> {
           ),
         ),
       ),
-      home: const HomePage(),
+      home: HomePage(initialGamePath: widget.initialGamePath),
     );
   }
 }

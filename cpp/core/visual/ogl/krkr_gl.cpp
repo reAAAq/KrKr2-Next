@@ -137,6 +137,10 @@ void OnRendererRecreated(std::function<void()> callback) {
     s_rendererRecreatedCallbacks.push_back(std::move(callback));
 }
 
+void ClearRendererRecreatedCallbacks() {
+    s_rendererRecreatedCallbacks.clear();
+}
+
 void FireRendererRecreated() {
     // Invalidate all caches first
     InvalidateStateCache();

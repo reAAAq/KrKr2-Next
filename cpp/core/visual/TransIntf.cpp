@@ -337,6 +337,11 @@ iTVPTransHandlerProvider *TVPFindTransHandlerProvider(const ttstr &name) {
         holder = TVPTransHandlerProviders.Find(TJS_W("crossfade"));
     }
 
+    if(!holder) {
+        TVPThrowExceptionMessage(TVPTransHandlerError,
+                                 TJS_W("transition handler provider is not registered"));
+    }
+
     iTVPTransHandlerProvider *pro = holder->GetObjectNoAddRef();
     pro->AddRef();
     return pro;
@@ -349,6 +354,11 @@ static void TVPClearTransHandlerProvider() {
 static tTVPAtExit
     TVPClearTransHandlerProviderAtExit(TVP_ATEXIT_PRI_SHUTDOWN,
                                        TVPClearTransHandlerProvider);
+
+void TVPResetTransIntfForRestart() {
+    TVPClearTransHandlerProvider();
+    TVPTransHandlerProviderInit = true;
+}
 //---------------------------------------------------------------------------
 
 //---------------------------------------------------------------------------

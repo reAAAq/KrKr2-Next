@@ -127,6 +127,7 @@ target_include_directories(${PROJECT_NAME}
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
         $<BUILD_INTERFACE:${GEN_CODE_BINARY_DIR}>
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/cpp/core>
     INTERFACE
         $<INSTALL_INTERFACE:include/tjs2>
         $<INSTALL_INTERFACE:include/tjs2/parser>

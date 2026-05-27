@@ -585,9 +585,11 @@ void TVPConsoleLog(const ttstr &mes, bool important) {
     // Convert TJS string to UTF-8 for spdlog
     tTJSNarrowStringHolder narrow_mes(mes.c_str());
     if (important) {
-        spdlog::info("[TVP Console] {}", narrow_mes.operator const char *());
+        spdlog::info("[TVP Console][source:runtime] {}",
+                     narrow_mes.operator const char *());
     } else {
-        spdlog::debug("[TVP Console] {}", narrow_mes.operator const char *());
+        spdlog::debug("[TVP Console][source:runtime] {}",
+                      narrow_mes.operator const char *());
     }
 }
 
@@ -597,7 +599,8 @@ void TVPConsoleLog(const ttstr &mes, bool important) {
 namespace TJS {
 void TVPConsoleLog(const tTJSString &str) {
     tTJSNarrowStringHolder narrow(str.c_str());
-    spdlog::debug("[TJS Console] {}", narrow.operator const char *());
+    spdlog::debug("[TJS Console][source:runtime] {}",
+                  narrow.operator const char *());
 }
 } // namespace TJS
 

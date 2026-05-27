@@ -10,6 +10,12 @@ ncbAutoRegister::_top[ncbAutoRegister::LINE_COUNT] = NCB_INNER_AUTOREGISTER_LINE
 
 std::map<ttstr, ncbAutoRegister::INTERNAL_PLUGIN_LISTS > ncbAutoRegister::_internal_plugins;
 
+void ncbAutoRegister::ResetModuleStateForRestart()
+{
+	TVPRegisteredPlugins.clear();
+	_internal_plugins.clear();
+}
+
 bool ncbAutoRegister::LoadModule(const ttstr &_name)
 {
 	ttstr name = _name.AsLowerCase();

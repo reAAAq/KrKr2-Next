@@ -31,6 +31,8 @@ extern bool TVPTerminateOnNoWindowStartup;
 extern int TVPTerminateCode;
 extern bool TVPHostSuppressProcessExit;
 
+extern void TVPResetSysInitImplForRestart();
+
 //---------------------------------------------------------------------------
 
 #include "SysInitIntf.h"

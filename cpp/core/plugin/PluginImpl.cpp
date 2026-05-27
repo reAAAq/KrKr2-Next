@@ -47,6 +47,7 @@ bool TVPLoadInternalPlugin(const ttstr &_name);
 bool TVPRegisterGlobalObject(const tjs_char *name, iTJSDispatch2 *dsp);
 
 static iTJSDispatch2 *s_ProxyStorageMap = nullptr;
+static iTVPStorageMedia *s_ProxyStorageMedia = nullptr;
 
 class tTJSNI_GamepadStub : public tTJSNativeInstance {
 public:
@@ -257,7 +258,21 @@ public:
     void GetLocallyAccessibleName(ttstr &name) override { name.Clear(); }
 };
 
+static void TVPResetPluginFallbackStubsForRestart() {
+    if(s_ProxyStorageMedia) {
+        TVPUnregisterStorageMedia(s_ProxyStorageMedia);
+        s_ProxyStorageMedia->Release();
+        s_ProxyStorageMedia = nullptr;
+    }
+    if(s_ProxyStorageMap) {
+        s_ProxyStorageMap->Release();
+        s_ProxyStorageMap = nullptr;
+    }
+}
+
 static void TVPRegisterProxyFsStub() {
+    TVPResetPluginFallbackStubsForRestart();
+
     iTJSDispatch2 *dict = TJSCreateDictionaryObject();
     if(!dict) return;
     s_ProxyStorageMap = dict;
@@ -266,6 +281,8 @@ static void TVPRegisterProxyFsStub() {
     dict->Release();
 
     auto *media = new tTVPProxyStorageMedia();
+    s_ProxyStorageMedia = media;
+    s_ProxyStorageMedia->AddRef();
     TVPRegisterStorageMedia(media);
     media->Release();
     spdlog::info("Registered proxy storage media stub for missing proxyfs.dll");
@@ -355,6 +372,19 @@ static void TVPSearchPluginsAt(std::vector<tTVPFoundPlugin> &list,
 void TVPLoadInternalPlugins() {
     ncbAutoRegister::AllRegist();
     ncbAutoRegister::LoadAllModules();
+}
+
+void TVPUnregisterInternalPluginsForRestart() {
+    spdlog::info("TVPUnregisterInternalPluginsForRestart: unregister internal plugins");
+    ncbAutoRegister::AllUnregist();
+    TVPResetPluginFallbackStubsForRestart();
+}
+
+void TVPResetPluginSystemForRestart() {
+    spdlog::info("TVPResetPluginSystemForRestart: clear plugin restart state");
+    TVPAutoLoadPluginCount = 0;
+    TVPResetPluginFallbackStubsForRestart();
+    ncbAutoRegister::ResetModuleStateForRestart();
 }
 
 bool TVPLoadInternalPlugin(const ttstr &_name) {

@@ -30,6 +30,7 @@
 
 tTJSHashTable<ttstr, TVPFontNamePathInfo, tTVPttstrHash> TVPFontNames;
 static ttstr TVPDefaultFontName;
+static bool TVPFontNamesInit = false;
 const ttstr &TVPGetDefaultFontName() { return TVPDefaultFontName; }
 void TVPGetAllFontList(std::vector<ttstr> &list) {
     auto itend = TVPFontNames.GetLast();
@@ -57,7 +58,15 @@ const FT_Library TVPGetFontLibrary() {
 void TVPReleaseFontLibrary() {
     if(TVPFontLibrary) {
         FT_Done_FreeType(TVPFontLibrary);
+        TVPFontLibrary = nullptr;
     }
+}
+
+void TVPResetFontImplForRestart() {
+    TVPReleaseFontLibrary();
+    TVPFontNames.Clear();
+    TVPDefaultFontName.Clear();
+    TVPFontNamesInit = false;
 }
 //---------------------------------------------------------------------------
 static int TVPInternalEnumFonts(
@@ -185,7 +194,6 @@ extern ttstr Android_GetInternalStoragePath();
 extern ttstr Android_GetApkStoragePath();
 #endif
 void TVPInitFontNames() {
-    static bool TVPFontNamesInit = false;
     // enumlate all fonts
     if(TVPFontNamesInit)
         return;
