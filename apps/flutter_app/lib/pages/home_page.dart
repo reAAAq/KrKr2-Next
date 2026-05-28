@@ -22,9 +22,7 @@ enum EngineMode { builtIn, custom }
 
 /// The home / launcher page — manage and launch games.
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, this.initialGamePath});
-
-  final String? initialGamePath;
+  const HomePage({super.key});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -46,7 +44,6 @@ class _HomePageState extends State<HomePage> {
   String _renderer = PrefsKeys.rendererOpengl;
   String _angleBackend = PrefsKeys.angleBackendGles;
   bool _forceLandscape = true;
-  bool _didHandleInitialGamePath = false;
 
   String? _resolveBuiltInDylibPath() {
     if (Platform.isIOS) {
@@ -114,47 +111,7 @@ class _HomePageState extends State<HomePage> {
       await _initIosGamesDir();
     }
 
-    await _handleInitialGamePath();
-
     if (mounted) setState(() => _loading = false);
-  }
-
-  Future<void> _handleInitialGamePath() async {
-    if (_didHandleInitialGamePath) {
-      return;
-    }
-    _didHandleInitialGamePath = true;
-
-    final initialGamePath = widget.initialGamePath;
-    if (initialGamePath == null || initialGamePath.isEmpty) {
-      return;
-    }
-
-    var game = _gameManager.games
-        .where((g) => g.path == initialGamePath)
-        .firstOrNull;
-    if (game == null) {
-      final added = await _gameManager.addGame(GameInfo(path: initialGamePath));
-      if (!added) {
-        game = _gameManager.games
-            .where((g) => g.path == initialGamePath)
-            .firstOrNull;
-      }
-    }
-
-    game ??= _gameManager.games
-        .where((g) => g.path == initialGamePath)
-        .firstOrNull;
-    if (game == null || !mounted) {
-      return;
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      _launchGame(game!);
-    });
   }
 
   Future<void> _initIosGamesDir() async {

@@ -6,19 +6,15 @@ import 'config/stats_base_url.dart'
 import 'l10n/app_localizations.dart';
 import 'pages/home_page.dart';
 import 'services/first_open_analytics.dart';
-import 'services/launch_args_service.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  final initialGamePath = await LaunchArgsService.getInitialGamePath();
   FirstOpenAnalytics.reportIfNeeded(baseUrl: statsBaseUrl, version: '1.0.0');
-  runApp(Krkr2App(initialGamePath: initialGamePath));
+  runApp(const Krkr2App());
 }
 
 class Krkr2App extends StatefulWidget {
-  const Krkr2App({super.key, this.initialGamePath});
-
-  final String? initialGamePath;
+  const Krkr2App({super.key});
 
   /// Change the app locale at runtime. Pass null to follow system default.
   static void setLocale(BuildContext context, Locale? locale) {
@@ -117,7 +113,7 @@ class _Krkr2AppState extends State<Krkr2App> {
           ),
         ),
       ),
-      home: HomePage(initialGamePath: widget.initialGamePath),
+      home: const HomePage(),
     );
   }
 }
