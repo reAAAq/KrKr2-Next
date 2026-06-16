@@ -181,18 +181,40 @@ static void TVPFreeArchiveHandlePool() {
 
 //---------------------------------------------------------------------------
 static void TVPShutdownArchiveHandleCache() {
-    // free all stream and shutdown the pool
+    // Free all streams and tear down the pool. This handler runs on every
+    // engine shutdown (including subsequent restarts within the same
+    // process), so it MUST leave global state in a "fresh / uninitialized"
+    // condition — otherwise a second invocation re-enters this loop with
+    // a dangling TVPArchiveHandleCachePool pointer and crashes.
     tTJSCriticalSectionHolder cs_holder(TVPArchiveHandleCacheCS);
 
-    TVPArchiveHandleCacheShutdown = true;
-    if(!TVPArchiveHandleCacheInit)
+    if(!TVPArchiveHandleCacheInit) {
+        // Pool was never lazily initialized this session — nothing to do.
+        // Re-arm shutdown flag in case a previous session set it.
+        TVPArchiveHandleCacheShutdown = false;
         return;
-
-    for(tjs_int i = 0; i < TVP_MAX_ARCHIVE_HANDLE_CACHE; i++) {
-        if(TVPArchiveHandleCachePool[i].Stream)
-            delete TVPArchiveHandleCachePool[i].Stream;
     }
-    delete[] TVPArchiveHandleCachePool;
+
+    // Block any new cache lookups while we are tearing down.
+    TVPArchiveHandleCacheShutdown = true;
+
+    if(TVPArchiveHandleCachePool) {
+        for(tjs_int i = 0; i < TVP_MAX_ARCHIVE_HANDLE_CACHE; i++) {
+            if(TVPArchiveHandleCachePool[i].Stream) {
+                delete TVPArchiveHandleCachePool[i].Stream;
+                TVPArchiveHandleCachePool[i].Stream = nullptr;
+            }
+            TVPArchiveHandleCachePool[i].Pointer = nullptr;
+            TVPArchiveHandleCachePool[i].Age = 0;
+        }
+        delete[] TVPArchiveHandleCachePool;
+        TVPArchiveHandleCachePool = nullptr;
+    }
+    TVPArchiveHandleCacheInit = false;
+    TVPArchiveHandleCacheAge = 0;
+    // Re-arm so the next session can lazily initialize the pool again
+    // (TVPGetCachedArchiveHandle bypasses the cache while this flag is set).
+    TVPArchiveHandleCacheShutdown = false;
 }
 
 //---------------------------------------------------------------------------

@@ -108,17 +108,38 @@ struct tTVPAtExitInfo {
     }
 };
 
-static std::vector<tTVPAtExitInfo> *TVPAtExitInfos = nullptr;
+// At-exit handler storage.
+//
+// Handlers are registered (almost) exclusively via `static tTVPAtExit X(...)`
+// instances scattered across the codebase. C++ static initializers only run
+// once per process lifetime, so a "restart" (engine_destroy + engine_init in
+// the same process) cannot rely on those re-registering the handlers.
+//
+// To support arbitrarily many restarts we keep the handler list alive for the
+// entire process lifetime via a Meyers' singleton, and merely mark which
+// handlers have already been invoked for the current run. On the next
+// startup, TVPResetRuntimeForRestart() rearms every handler so they fire
+// again on the next shutdown — without re-running any C++ static initializer.
+static std::vector<tTVPAtExitInfo> &TVPAtExitInfoList() {
+    // Function-local static — constructed on first use, destroyed only at
+    // process exit. Avoids static init order fiasco and naturally survives
+    // engine_destroy / engine_init cycles.
+    static std::vector<tTVPAtExitInfo> infos;
+    return infos;
+}
+
 static bool TVPAtExitShutdown = false;
+static bool TVPAtExitSorted = false;
 
 //---------------------------------------------------------------------------
 void TVPAddAtExitHandler(tjs_int pri, void (*handler)()) {
     if(TVPAtExitShutdown)
         return;
 
-    if(!TVPAtExitInfos)
-        TVPAtExitInfos = new std::vector<tTVPAtExitInfo>();
-    TVPAtExitInfos->emplace_back(pri, handler);
+    auto &infos = TVPAtExitInfoList();
+    infos.emplace_back(pri, handler);
+    // A new handler was added — re-sort on next TVPCauseAtExit().
+    TVPAtExitSorted = false;
 }
 
 //---------------------------------------------------------------------------
@@ -127,15 +148,22 @@ static void TVPCauseAtExit() {
         return;
     TVPAtExitShutdown = true;
 
-    std::sort(TVPAtExitInfos->begin(),
-              TVPAtExitInfos->end()); // descending sort
+    auto &infos = TVPAtExitInfoList();
+    if(infos.empty())
+        return;
 
-    for(auto i = TVPAtExitInfos->begin(); i != TVPAtExitInfos->end(); ++i) {
-        i->Handler();
+    if(!TVPAtExitSorted) {
+        std::sort(infos.begin(), infos.end()); // descending sort
+        TVPAtExitSorted = true;
     }
 
-    delete TVPAtExitInfos;
-    TVPAtExitInfos = nullptr;
+    // Iterate by index; in the unlikely event a handler registers another
+    // handler we won't crash on iterator invalidation. The new one will be
+    // picked up on the next shutdown after a restart.
+    const size_t snapshot = infos.size();
+    for(size_t i = 0; i < snapshot; ++i) {
+        infos[i].Handler();
+    }
 }
 //---------------------------------------------------------------------------
 
@@ -144,10 +172,10 @@ static void TVPCauseAtExit() {
 //---------------------------------------------------------------------------
 void TVPResetRuntimeForRestart() {
     TVPSystemUninitCalled = false;
+    // Re-arm all at-exit handlers. The handler list itself is preserved by
+    // TVPAtExitInfoList()'s function-local static; we only need to flip the
+    // shutdown flag so TVPCauseAtExit() will run them again on next teardown.
     TVPAtExitShutdown = false;
-    // TVPAtExitInfos was deleted by TVPCauseAtExit(); leave it null so
-    // TVPAddAtExitHandler will re-create it on next startup.
-    TVPAtExitInfos = nullptr;
     TVPProjectDir.Clear();
     TVPDataPath.Clear();
 }
