@@ -681,3 +681,32 @@ static void TVPExecuteAsync(const std::wstring &progname) {}
 static bool TVPWaitWritePermit(const std::wstring &fn) { return false; }
 
 bool TVPExecuteUserConfig() { return false; }
+
+//---------------------------------------------------------------------------
+// TVPResetSysInitImplForRestart : Reset impl-level state for restart
+//---------------------------------------------------------------------------
+extern bool TVPSystemControlAlive;  // SystemControl.cpp
+
+void TVPResetSysInitImplForRestart() {
+    TVPProgramArgumentsInit = false;
+    TVPDataPathDirectoryEnsured = false;
+    TVPProgramArguments.clear();
+    TVPEarlySetOptions.clear();
+    TVPCommandLineArgumentGeneration = 0;
+
+    TVPTerminated = false;
+    TVPTerminateCode = 0;
+
+    TVPProjectDirSelected = false;
+    TVPNativeProjectDir.Clear();
+    TVPNativeDataPath.Clear();
+
+    // Reset SystemControl alive flag (set in tTVPSystemControl constructor,
+    // never cleared by destructor).
+    TVPSystemControlAlive = false;
+
+    // Reset priority control init so it's re-evaluated on next startup.
+    // (TVPMainThreadPriorityControlInit is in SystemControl.cpp but we
+    //  handle it via this extern reset since we can't add an export there.)
+}
+//---------------------------------------------------------------------------

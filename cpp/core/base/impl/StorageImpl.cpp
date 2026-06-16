@@ -37,6 +37,7 @@
 #include "combase.h"
 
 #include "spdlog/spdlog.h"
+#include <spdlog/spdlog.h>
 
 #if defined(__APPLE__)
 #include <CoreFoundation/CoreFoundation.h>
@@ -104,7 +105,8 @@ static void _tjs_normalize_nfc(ttstr &name) {
     CFMutableStringRef str = CFStringCreateMutable(kCFAllocatorDefault, 0);
     if(!str)
         return;
-    CFStringAppendCharacters(str, reinterpret_cast<const UniChar *>(name.c_str()),
+    CFStringAppendCharacters(str,
+                             reinterpret_cast<const UniChar *>(name.c_str()),
                              static_cast<CFIndex>(name.GetLen()));
     CFStringNormalize(str, kCFStringNormalizationFormC);
     const CFIndex len = CFStringGetLength(str);
@@ -310,12 +312,14 @@ static int _utf8_strcasecmp_nfc(const char *a, const char *b) {
     CFStringRef sb = CFStringCreateWithCString(kCFAllocatorDefault, b,
                                                kCFStringEncodingUTF8);
     if(!sa || !sb) {
-        if(sa) CFRelease(sa);
-        if(sb) CFRelease(sb);
+        if(sa)
+            CFRelease(sa);
+        if(sb)
+            CFRelease(sb);
         return _utf8_strcasecmp(a, b);
     }
-    CFComparisonResult res = CFStringCompare(sa, sb,
-        kCFCompareCaseInsensitive | kCFCompareNonliteral);
+    CFComparisonResult res = CFStringCompare(
+        sa, sb, kCFCompareCaseInsensitive | kCFCompareNonliteral);
     CFRelease(sa);
     CFRelease(sb);
     return (int)res;
@@ -423,10 +427,13 @@ void tTVPFileMedia::GetLocallyAccessibleName(ttstr &name) {
         prefix += tTJSNarrowStringHolder(ptr).Buf;
         static const std::vector<ttstr> &prefixPath = _getPrefixPath();
         static const std::vector<std::string> &homeDir = _getHomeDir();
-        spdlog::debug("iOS GetLocallyAccessibleName: prefix='{}', homeDir count={}", prefix, homeDir.size());
+        spdlog::debug(
+            "iOS GetLocallyAccessibleName: prefix='{}', homeDir count={}",
+            prefix, homeDir.size());
         for(int i = 0; i < (int)prefixPath.size(); ++i) {
             const std::string &dir = homeDir[i];
-            spdlog::debug("  homeDir[{}]='{}' prefixPath[{}]='{}'", i, dir, i, prefixPath[i].AsNarrowStdString());
+            spdlog::debug("  homeDir[{}]='{}' prefixPath[{}]='{}'", i, dir,
+                             i, prefixPath[i].AsNarrowStdString());
             if(prefix.length() < dir.length())
                 continue;
             std::string actualPrefix = prefix.substr(0, dir.length());
@@ -435,7 +442,10 @@ void tTVPFileMedia::GetLocallyAccessibleName(ttstr &name) {
                 ptr += prefixPath[i].length();
                 while(*ptr && *ptr == TJS_W('/'))
                     ++ptr;
-                spdlog::debug("  iOS prefix matched! newname='{}', remaining ptr='{}'", newname.AsNarrowStdString(), tTJSNarrowStringHolder(ptr).Buf);
+                spdlog::debug(
+                    "  iOS prefix matched! newname='{}', remaining ptr='{}'",
+                    newname.AsNarrowStdString(),
+                    tTJSNarrowStringHolder(ptr).Buf);
                 break;
             }
         }
@@ -582,9 +592,20 @@ bool TVPRemoveFolder(const ttstr &name) {
 //---------------------------------------------------------------------------
 // TVPGetAppPath
 //---------------------------------------------------------------------------
+namespace {
+    ttstr *g_cached_app_path = nullptr;
+}
+
 ttstr TVPGetAppPath() {
-    static ttstr apppath(TVPExtractStoragePath(TVPProjectDir));
-    return apppath;
+    if(g_cached_app_path == nullptr) {
+        g_cached_app_path = new ttstr(TVPExtractStoragePath(TVPProjectDir));
+    }
+    return *g_cached_app_path;
+}
+
+void TVPResetStorageImplForRestart() {
+    delete g_cached_app_path;
+    g_cached_app_path = nullptr;
 }
 //---------------------------------------------------------------------------
 
@@ -1499,18 +1520,23 @@ void TVPAutoMountSiblingXP3Archives() {
 
     ttstr projBaseName = TVPExtractStorageName(projDir);
 
-    spdlog::info("AutoMountXP3: TVPProjectDir={}", TVPProjectDir.AsStdString());
-    spdlog::info("AutoMountXP3: parentStoragePath={}", parentStoragePath.AsStdString());
-    spdlog::info("AutoMountXP3: projBaseName={}", projBaseName.AsStdString());
+    spdlog::info("AutoMountXP3: TVPProjectDir={}",
+                    TVPProjectDir.AsStdString());
+    spdlog::info("AutoMountXP3: parentStoragePath={}",
+                    parentStoragePath.AsStdString());
+    spdlog::info("AutoMountXP3: projBaseName={}",
+                    projBaseName.AsStdString());
 
     ttstr nativeParent = parentStoragePath;
     try {
         TVPGetLocalName(nativeParent);
     } catch(eTJSError &e) {
-        spdlog::error("AutoMountXP3: TVPGetLocalName threw: {}", e.GetMessage().AsStdString());
+        spdlog::error("AutoMountXP3: TVPGetLocalName threw: {}",
+                         e.GetMessage().AsStdString());
         return;
     } catch(...) {
-        spdlog::error("AutoMountXP3: TVPGetLocalName threw unknown exception");
+        spdlog::error(
+            "AutoMountXP3: TVPGetLocalName threw unknown exception");
         return;
     }
 
@@ -1518,27 +1544,34 @@ void TVPAutoMountSiblingXP3Archives() {
     spdlog::info("AutoMountXP3: nativeParent={}", parentPath);
 
     std::string projBaseStr = projBaseName.AsNarrowStdString();
-    for(auto &c : projBaseStr) c = (char)tolower((unsigned char)c);
+    for(auto &c : projBaseStr)
+        c = (char)tolower((unsigned char)c);
 
     std::vector<std::string> xp3Names;
 
     DIR *dirp = opendir(parentPath.c_str());
     if(!dirp) {
-        spdlog::error("AutoMountXP3: opendir failed for: {}, errno={}", parentPath, errno);
+        spdlog::error("AutoMountXP3: opendir failed for: {}, errno={}",
+                         parentPath, errno);
         return;
     }
 
     struct dirent *dp;
     while((dp = readdir(dirp))) {
         std::string name = dp->d_name;
-        if(name.size() < 5) continue;
+        if(name.size() < 5)
+            continue;
         std::string ext = name.substr(name.size() - 4);
-        for(auto &c : ext) c = (char)tolower((unsigned char)c);
-        if(ext != ".xp3") continue;
+        for(auto &c : ext)
+            c = (char)tolower((unsigned char)c);
+        if(ext != ".xp3")
+            continue;
 
         std::string baseLower = name.substr(0, name.size() - 4);
-        for(auto &c : baseLower) c = (char)tolower((unsigned char)c);
-        if(baseLower == projBaseStr) continue;
+        for(auto &c : baseLower)
+            c = (char)tolower((unsigned char)c);
+        if(baseLower == projBaseStr)
+            continue;
 
         xp3Names.push_back(name);
     }
@@ -1564,7 +1597,8 @@ void TVPAutoMountSiblingXP3Archives() {
                 archivePath);
             continue;
         }
-        if(!arc) continue;
+        if(!arc)
+            continue;
 
         std::set<std::u16string> dirPaths;
         dirPaths.insert(std::u16string());
@@ -1576,9 +1610,8 @@ void TVPAutoMountSiblingXP3Archives() {
             tjs_int len = fname.GetLen();
             for(tjs_int j = 0; j < len; j++) {
                 if(s[j] == TJS_W('/')) {
-                    std::u16string d(
-                        reinterpret_cast<const char16_t *>(s),
-                        static_cast<size_t>(j + 1));
+                    std::u16string d(reinterpret_cast<const char16_t *>(s),
+                                     static_cast<size_t>(j + 1));
                     dirPaths.insert(d);
                 }
             }
@@ -1595,20 +1628,23 @@ void TVPAutoMountSiblingXP3Archives() {
             ttstr autoPath = archiveBase + dirStr;
             try {
                 TVPAddAutoPath(autoPath);
-                TVPAutoMountedPaths.push_back(TVPNormalizeStorageName(autoPath));
-            } catch(...) {}
+                TVPAutoMountedPaths.push_back(
+                    TVPNormalizeStorageName(autoPath));
+            } catch(...) {
+            }
         }
 
         TVPAddImportantLog(
             ttstr(TJS_W("(info) Auto-mounted sibling archive: ")) +
-            archivePath + ttstr(TJS_W(" (")) +
-            ttstr((tjs_int)dirPaths.size()) + ttstr(TJS_W(" dirs, ")) +
-            ttstr((tjs_int)fileCount) + ttstr(TJS_W(" files)")));
+            archivePath + ttstr(TJS_W(" (")) + ttstr((tjs_int)dirPaths.size()) +
+            ttstr(TJS_W(" dirs, ")) + ttstr((tjs_int)fileCount) +
+            ttstr(TJS_W(" files)")));
     }
 }
 
 void TVPBoostAutoMountPaths() {
-    if(TVPAutoMountedPaths.empty()) return;
+    if(TVPAutoMountedPaths.empty())
+        return;
 
     extern std::vector<ttstr> TVPAutoPathList;
     extern bool AutoPathTableInit;
@@ -1622,6 +1658,7 @@ void TVPBoostAutoMountPaths() {
     TVPAutoMountedPaths.clear();
 
     AutoPathTableInit = false;
-    spdlog::info("TVPBoostAutoMountPaths: re-ordered {} patch paths to end of auto path list",
-                 TVPAutoPathList.size());
+    spdlog::info("TVPBoostAutoMountPaths: re-ordered {} patch paths to end "
+                    "of auto path list",
+                    TVPAutoPathList.size());
 }

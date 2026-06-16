@@ -5,6 +5,7 @@ set(UTILS_PATH ${CMAKE_CURRENT_LIST_DIR})
 set(UTILS_SOURCE_FILES
     ${UTILS_PATH}/ClipboardIntf.cpp
     ${UTILS_PATH}/DebugIntf.cpp
+    ${UTILS_PATH}/LogSetup.cpp
     ${UTILS_PATH}/MathAlgorithms_Default.cpp
     ${UTILS_PATH}/md5.c
     ${UTILS_PATH}/MiscUtility.cpp
@@ -36,3 +37,6 @@ set(UTILS_HEADERS_DIR
 add_library(${PROJECT_NAME} STATIC ${UTILS_SOURCE_FILES})
 target_include_directories(${PROJECT_NAME} PUBLIC ${UTILS_HEADERS_DIR})
 target_link_libraries(${PROJECT_NAME} PUBLIC tjs2 PRIVATE core_base_module core_environ_module)
+
+find_package(spdlog CONFIG REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE spdlog::spdlog)

@@ -387,7 +387,7 @@ public:
             textureIds_.push_back(texId);
         }
 
-        CreateRenderer();
+        CreateRenderer(static_cast<csmUint32>(renderWidth_), static_cast<csmUint32>(renderHeight_));
         auto *renderer = GetRenderer<Rendering::CubismRenderer_OpenGLES2>();
         if (!renderer) {
             spdlog::error("krkrlive2d: failed to create renderer");
@@ -585,7 +585,13 @@ private:
         mosaicCpuScratch_.clear();
 
         if (GetModel()) {
-            GetModel()->ClearDrawableForceHiddenFlags();
+            // R5 SDK removed ClearDrawableForceHiddenFlags; reset multiply color overrides instead
+            auto& colorOverride = GetModel()->GetOverrideMultiplyAndScreenColor();
+            for (csmInt32 idx : mosaicDrawableIndices_) {
+                if (idx >= 0) {
+                    colorOverride.SetDrawableMultiplyColorEnabled(idx, false);
+                }
+            }
         }
         if (!GetModel() || !setting_) return;
 
@@ -672,9 +678,14 @@ private:
         if (!GetModel()) return;
         // Mosaic effect is disabled globally; always hide mosaic-tagged overlay meshes.
         const bool hideSourceMesh = !mosaicEffectEnabled_ || IsMosaicEnabled();
+        auto& colorOverride = GetModel()->GetOverrideMultiplyAndScreenColor();
         for (csmInt32 drawableIndex : mosaicDrawableIndices_) {
             if (drawableIndex < 0) continue;
-            GetModel()->SetDrawableForceHidden(drawableIndex, hideSourceMesh);
+            // R5 SDK: use multiply color override to hide drawables (alpha=0)
+            colorOverride.SetDrawableMultiplyColorEnabled(drawableIndex, hideSourceMesh);
+            if (hideSourceMesh) {
+                colorOverride.SetDrawableMultiplyColor(drawableIndex, 0.0f, 0.0f, 0.0f, 0.0f);
+            }
         }
 
         if (mosaicParentPartIndices_.empty()) return;

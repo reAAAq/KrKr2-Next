@@ -30,3 +30,4 @@ TVPCreateNativeClass_ClassFoo,TJS_W("Window,Layer"));
 登録時依存クラスを3番目に指定可能ですが、現在のところ無視されています。
 */
 extern void TVPCauseAtInstallExtensionClass(iTJSDispatch2 *global);
+extern void TVPResetExtensionClassInstallStateForRestart();

@@ -26,6 +26,7 @@
 #include "WaveImpl.h"
 #include "GraphicsLoadThread.h"
 #include "Platform.h"
+#include <spdlog/spdlog.h>
 #include "EventIntf.h"
 #include <thread>
 #include "ConfigManager/LocaleConfigManager.h"
@@ -802,6 +803,26 @@ void tTVPApplication::OnExit() {
 
     CloseConsole();
 }
+
+//---------------------------------------------------------------------------
+// TVPResetApplicationForRestart : Reset application state for restart
+//---------------------------------------------------------------------------
+void TVPResetApplicationForRestart() {
+    _project_startup = false;
+    Application->tarminate_ = false;
+    Application->application_activating_ = true;
+
+    // Delete async image loader (will be re-created on next StartApplication)
+    delete Application->image_load_thread_;
+    Application->image_load_thread_ = nullptr;
+
+    // Clear title
+    Application->title_.Clear();
+
+    // Clear active event registrations (they hold stale pointers)
+    Application->m_activeEvents.clear();
+}
+//---------------------------------------------------------------------------
 
 void tTVPApplication::OnLowMemory() {
     if(!_project_startup)

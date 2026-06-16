@@ -135,5 +135,20 @@ static void TVPCauseAtExit() {
     }
 
     delete TVPAtExitInfos;
+    TVPAtExitInfos = nullptr;
+}
+//---------------------------------------------------------------------------
+
+//---------------------------------------------------------------------------
+// TVPResetRuntimeForRestart : Reset state to allow re-initialization
+//---------------------------------------------------------------------------
+void TVPResetRuntimeForRestart() {
+    TVPSystemUninitCalled = false;
+    TVPAtExitShutdown = false;
+    // TVPAtExitInfos was deleted by TVPCauseAtExit(); leave it null so
+    // TVPAddAtExitHandler will re-create it on next startup.
+    TVPAtExitInfos = nullptr;
+    TVPProjectDir.Clear();
+    TVPDataPath.Clear();
 }
 //---------------------------------------------------------------------------

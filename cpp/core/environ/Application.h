@@ -181,6 +181,8 @@ public:
     void OnExit();
     void OnLowMemory();
 
+    friend void TVPResetApplicationForRestart();
+
     [[nodiscard]] bool GetActivating() const { return application_activating_; }
     [[nodiscard]] bool GetNotMinimizing() const;
 
@@ -207,5 +209,7 @@ std::vector<std::string> *LoadLinesFromFile(const ttstr &path);
 // inline HINSTANCE GetHInstance() { return
 // ((HINSTANCE)GetModuleHandle(0)); }
 extern class tTVPApplication *Application;
+
+extern void TVPResetApplicationForRestart();
 
 #endif // __T_APPLICATION_H__

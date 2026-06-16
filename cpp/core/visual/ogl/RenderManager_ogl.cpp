@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <sstream>
 #include "Platform.h"
+#include <spdlog/spdlog.h>
 #include "ConfigManager/IndividualConfigManager.h"
 #include "opencv2/opencv.hpp"
 #include <deque>
@@ -201,6 +202,21 @@ void TVPInitTextureFormatList() {
 }
 bool TVPIsSupportTextureFormat(GLenum fmt) {
     return TVPTextureFormats.end() != TVPTextureFormats.find(fmt);
+}
+
+static void TVPResetOpenGLGlobalsForRestart() {
+    sTVPGLExtensions.clear();
+    TVPGLExtensionInfoInited = false;
+    GL_CHECK_unpack_subimage = false;
+    GL_CHECK_shader_framebuffer_fetch = false;
+    TVPTextureFormats.clear();
+    GL::glCopyImageSubData = nullptr;
+    GL::glClearTexImage = nullptr;
+    GL::glClearTexSubImage = nullptr;
+#ifdef _MSC_VER
+    GL::glGetTextureImage = nullptr;
+#endif
+    GL::glAlphaFunc = nullptr;
 }
 
 static void TVPInitGLExtensionFunc() {
@@ -4976,6 +4992,13 @@ public:
 };
 
 REGISTER_RENDERMANAGER(TVPRenderManager_OpenGL, opengl);
+
+void TVPResetOpenGLRenderManagerForRestart() {
+    tTVPOGLRenderMethod_Script::ClearCache();
+    TVPResetOpenGLGlobalsForRestart();
+    krkr::gl::ClearRendererRecreatedCallbacks();
+    krkr::gl::InvalidateStateCache();
+}
 
 // Explicit registration function to force linker to include this translation unit
 // (static library dead-stripping would otherwise discard the auto-register global)

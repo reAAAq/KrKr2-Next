@@ -135,8 +135,7 @@ public:
     virtual bool IsStatic() = 0; // aka. is readonly
     virtual bool IsOpaque() = 0;
     // virtual void RefreshBitmap() = 0;
-    virtual krkr::Texture2D *
-    GetAdapterTexture(krkr::Texture2D *origTex) = 0;
+    virtual krkr::Texture2D *GetAdapterTexture(krkr::Texture2D *origTex) = 0;
     virtual bool GetScale(float &x, float &y) {
         x = 1.f;
         y = 1.f;
@@ -331,3 +330,5 @@ namespace TJS {
 }
 iTVPRenderManager *TVPGetRenderManager(const TJS::tTJSString &name);
 bool TVPIsSoftwareRenderManager();
+void TVPResetRenderManagerForRestart();
+void TVPResetOpenGLRenderManagerForRestart();

@@ -3,6 +3,7 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
+#include "utils/LogSetup.h"
 #include "environ/EngineBootstrap.h"
 #include "environ/Application.h"
 
@@ -12,6 +13,10 @@ int main(int argc, char *argv[]) {
     static auto core_logger = spdlog::stdout_color_mt("core");
     static auto tjs2_logger = spdlog::stdout_color_mt("tjs2");
     static auto plugin_logger = spdlog::stdout_color_mt("plugin");
+
+    TVPConfigureLoggerPattern(core_logger);
+    TVPConfigureLoggerPattern(tjs2_logger);
+    TVPConfigureLoggerPattern(plugin_logger);
 
     spdlog::set_default_logger(core_logger);
 

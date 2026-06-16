@@ -8,10 +8,13 @@ if (CCACHE_PROGRAM)
     message(STATUS "Ccache found: ${CCACHE_PROGRAM}")
 endif ()
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 add_compile_definitions(
         $<$<CONFIG:Debug>:DEBUG>
         $<$<CONFIG:Debug>:_DEBUG>   # 对于 MSVC 兼容性
         $<$<NOT:$<CONFIG:Debug>>:NDEBUG>
+        TVP_SOURCE_ROOT="${CMAKE_SOURCE_DIR}/"
 )
 
 # Detect Android build: Gradle may set CMAKE_SYSTEM_NAME=Android or VCPKG_TARGET_ANDROID=ON

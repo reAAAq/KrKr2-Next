@@ -109,6 +109,7 @@ TJS_EXP_FUNC_DEF(void, TVPAddTransHandlerProvider,
 TJS_EXP_FUNC_DEF(void, TVPRemoveTransHandlerProvider,
                  (iTVPTransHandlerProvider * pro));
 iTVPTransHandlerProvider *TVPFindTransHandlerProvider(const ttstr &name);
+void TVPResetTransIntfForRestart();
 //---------------------------------------------------------------------------
 
 /*[*/

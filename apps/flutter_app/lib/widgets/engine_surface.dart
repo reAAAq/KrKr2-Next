@@ -87,6 +87,7 @@ class EngineSurfaceState extends State<EngineSurface> {
   double _lastRequestedDpr = 1.0;
   EngineInputEventData? _pendingPointerMoveEvent;
   bool _pointerMoveFlushScheduled = false;
+  bool _releaseInProgress = false;
 
   @override
   void initState() {
@@ -125,6 +126,31 @@ class EngineSurfaceState extends State<EngineSurface> {
     await _disposeTexture();
     await _disposeIOSurfaceTexture();
     await _disposeSurfaceTexture();
+  }
+
+  Future<void> release() async {
+    if (_releaseInProgress) {
+      return;
+    }
+    _releaseInProgress = true;
+    _vsyncScheduled = false;
+    _pendingPointerMoveEvent = null;
+    _pointerMoveFlushScheduled = false;
+
+    try {
+      await _disposeAllTextures();
+      final ui.Image? previousImage = _frameImage;
+      _frameImage = null;
+      _lastFrameSerial = -1;
+      _frameWidth = 0;
+      _frameHeight = 0;
+      previousImage?.dispose();
+      if (mounted) {
+        setState(() {});
+      }
+    } finally {
+      _releaseInProgress = false;
+    }
   }
 
   void _reconcilePolling() {
@@ -472,7 +498,7 @@ class EngineSurfaceState extends State<EngineSurface> {
   // --- Frame polling ---
 
   Future<void> _pollFrame({bool? externalRendered}) async {
-    if (!widget.active || _frameInFlight) {
+    if (!widget.active || _frameInFlight || _releaseInProgress) {
       return;
     }
 

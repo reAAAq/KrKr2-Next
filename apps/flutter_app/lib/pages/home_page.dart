@@ -22,7 +22,9 @@ enum EngineMode { builtIn, custom }
 
 /// The home / launcher page — manage and launch games.
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.initialGamePath});
+
+  final String? initialGamePath;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -44,6 +46,7 @@ class _HomePageState extends State<HomePage> {
   String _renderer = PrefsKeys.rendererOpengl;
   String _angleBackend = PrefsKeys.angleBackendGles;
   bool _forceLandscape = true;
+  bool _didHandleInitialGamePath = false;
 
   String? _resolveBuiltInDylibPath() {
     if (Platform.isIOS) {
@@ -90,15 +93,19 @@ class _HomePageState extends State<HomePage> {
       _customDylibPath = null;
     } else {
       final modeStr = prefs.getString(PrefsKeys.engineMode);
-      _engineMode = modeStr == PrefsKeys.engineModeCustom ? EngineMode.custom : EngineMode.builtIn;
+      _engineMode = modeStr == PrefsKeys.engineModeCustom
+          ? EngineMode.custom
+          : EngineMode.builtIn;
       _customDylibPath = prefs.getString(PrefsKeys.dylibPath);
     }
     _perfOverlay = prefs.getBool(PrefsKeys.perfOverlay) ?? false;
     _fpsLimitEnabled = prefs.getBool(PrefsKeys.fpsLimitEnabled) ?? false;
     _targetFps = prefs.getInt(PrefsKeys.targetFps) ?? PrefsKeys.defaultFps;
-    if (!PrefsKeys.fpsOptions.contains(_targetFps)) _targetFps = PrefsKeys.defaultFps;
+    if (!PrefsKeys.fpsOptions.contains(_targetFps))
+      _targetFps = PrefsKeys.defaultFps;
     _renderer = prefs.getString(PrefsKeys.renderer) ?? PrefsKeys.rendererOpengl;
-    _angleBackend = prefs.getString(PrefsKeys.angleBackend) ?? PrefsKeys.angleBackendGles;
+    _angleBackend =
+        prefs.getString(PrefsKeys.angleBackend) ?? PrefsKeys.angleBackendGles;
     _forceLandscape = prefs.getBool(PrefsKeys.forceLandscape) ?? true;
     await _gameManager.load();
     await _gameManager.applyPendingPlaySession();
@@ -107,7 +114,47 @@ class _HomePageState extends State<HomePage> {
       await _initIosGamesDir();
     }
 
+    await _handleInitialGamePath();
+
     if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _handleInitialGamePath() async {
+    if (_didHandleInitialGamePath) {
+      return;
+    }
+    _didHandleInitialGamePath = true;
+
+    final initialGamePath = widget.initialGamePath;
+    if (initialGamePath == null || initialGamePath.isEmpty) {
+      return;
+    }
+
+    var game = _gameManager.games
+        .where((g) => g.path == initialGamePath)
+        .firstOrNull;
+    if (game == null) {
+      final added = await _gameManager.addGame(GameInfo(path: initialGamePath));
+      if (!added) {
+        game = _gameManager.games
+            .where((g) => g.path == initialGamePath)
+            .firstOrNull;
+      }
+    }
+
+    game ??= _gameManager.games
+        .where((g) => g.path == initialGamePath)
+        .firstOrNull;
+    if (game == null || !mounted) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _launchGame(game!);
+    });
   }
 
   Future<void> _initIosGamesDir() async {
@@ -161,9 +208,11 @@ class _HomePageState extends State<HomePage> {
     }
 
     final toRemove = _gameManager.games
-        .where((g) =>
-            g.path.startsWith(_iosGamesDir!) &&
-            !scannedNames.contains(p.basename(g.path)))
+        .where(
+          (g) =>
+              g.path.startsWith(_iosGamesDir!) &&
+              !scannedNames.contains(p.basename(g.path)),
+        )
         .map((g) => g.path)
         .toList();
     for (final path in toRemove) {
@@ -223,10 +272,8 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _addGameDirectory() async {
     final l10n = AppLocalizations.of(context)!;
-    final String? selectedDirectory =
-        await FilePicker.platform.getDirectoryPath(
-      dialogTitle: l10n.selectGameDirectory,
-    );
+    final String? selectedDirectory = await FilePicker.platform
+        .getDirectoryPath(dialogTitle: l10n.selectGameDirectory);
     if (selectedDirectory == null || !mounted) return;
 
     final game = GameInfo(path: selectedDirectory);
@@ -288,18 +335,19 @@ class _HomePageState extends State<HomePage> {
       // Using getDirectoryPath() causes macOS to grant powerbox-level access to the entire folder,
       // which persists across app launches and allows the engine to open all files within the directory.
       await _showMacosImportGuide();
-      
+
       final selectedDir = await FilePicker.platform.getDirectoryPath(
         dialogTitle: l10n.selectGameArchive,
       );
       if (selectedDir == null || !mounted) return;
 
-      final xp3Files = Directory(selectedDir)
-          .listSync()
-          .whereType<File>()
-          .where((f) => f.path.toLowerCase().endsWith('.xp3'))
-          .toList()
-        ..sort((a, b) => a.path.compareTo(b.path));
+      final xp3Files =
+          Directory(selectedDir)
+              .listSync()
+              .whereType<File>()
+              .where((f) => f.path.toLowerCase().endsWith('.xp3'))
+              .toList()
+            ..sort((a, b) => a.path.compareTo(b.path));
 
       if (xp3Files.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -332,7 +380,9 @@ class _HomePageState extends State<HomePage> {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(l10n.gameAlreadyExists(p.basename(selectedFile.path))),
+              content: Text(
+                l10n.gameAlreadyExists(p.basename(selectedFile.path)),
+              ),
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -418,15 +468,17 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   Text(l10n.importStep1, style: const TextStyle(fontSize: 13)),
                   const SizedBox(height: 6),
-                  Text(l10n.importStep2,
-                      style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w600)),
+                  Text(
+                    l10n.importStep2,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   const SizedBox(height: 6),
-                  Text(l10n.importStep3,
-                      style: const TextStyle(fontSize: 13)),
+                  Text(l10n.importStep3, style: const TextStyle(fontSize: 13)),
                   const SizedBox(height: 6),
-                  Text(l10n.importStep4,
-                      style: const TextStyle(fontSize: 13)),
+                  Text(l10n.importStep4, style: const TextStyle(fontSize: 13)),
                 ],
               ),
             ),
@@ -436,10 +488,9 @@ class _HomePageState extends State<HomePage> {
               style: TextStyle(
                 fontSize: 12,
                 fontFamily: 'monospace',
-                color: Theme.of(ctx)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.5),
+                color: Theme.of(
+                  ctx,
+                ).colorScheme.onSurface.withValues(alpha: 0.5),
               ),
             ),
           ],
@@ -519,8 +570,14 @@ class _HomePageState extends State<HomePage> {
             ),
             if (game.coverPath != null)
               ListTile(
-                leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                title: Text(l10n.coverRemove, style: const TextStyle(color: Colors.redAccent)),
+                leading: const Icon(
+                  Icons.delete_outline,
+                  color: Colors.redAccent,
+                ),
+                title: Text(
+                  l10n.coverRemove,
+                  style: const TextStyle(color: Colors.redAccent),
+                ),
                 onTap: () => Navigator.pop(ctx, 'remove'),
               ),
           ],
@@ -551,7 +608,8 @@ class _HomePageState extends State<HomePage> {
       await coversDir.create(recursive: true);
     }
     final ext = image.path.split('.').last;
-    final fileName = '${game.path.hashCode}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+    final fileName =
+        '${game.path.hashCode}_${DateTime.now().millisecondsSinceEpoch}.$ext';
     final destPath = '${coversDir.path}/$fileName';
     await File(image.path).copy(destPath);
 
@@ -606,7 +664,8 @@ class _HomePageState extends State<HomePage> {
     final l10n = AppLocalizations.of(context)!;
     final dylibPath = _effectiveDylibPath;
     final isSystemLoadedBuiltIn =
-        (Platform.isIOS || Platform.isAndroid) && _engineMode == EngineMode.builtIn;
+        (Platform.isIOS || Platform.isAndroid) &&
+        _engineMode == EngineMode.builtIn;
     if (dylibPath == null && !isSystemLoadedBuiltIn) {
       final msg = _engineMode == EngineMode.builtIn
           ? l10n.engineNotFoundBuiltIn
@@ -639,10 +698,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _openGameDetail(GameInfo game) async {
     final result = await Navigator.of(context).push<GameDetailResult>(
       MaterialPageRoute<GameDetailResult>(
-        builder: (_) => GameDetailPage(
-          game: game,
-          gameManager: _gameManager,
-        ),
+        builder: (_) => GameDetailPage(game: game, gameManager: _gameManager),
       ),
     );
     if (result == null || !mounted) return;
@@ -707,8 +763,7 @@ class _HomePageState extends State<HomePage> {
             children: [
               ValueListenableBuilder<double>(
                 valueListenable: progress,
-                builder: (_, value, _) =>
-                    LinearProgressIndicator(value: value),
+                builder: (_, value, _) => LinearProgressIndicator(value: value),
               ),
               const SizedBox(height: 12),
               ValueListenableBuilder<String>(
@@ -879,9 +934,7 @@ class _HomePageState extends State<HomePage> {
                         Expanded(
                           child: Text(
                             l10n.appTitle,
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineMedium
+                            style: Theme.of(context).textTheme.headlineMedium
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                         ),
@@ -889,11 +942,11 @@ class _HomePageState extends State<HomePage> {
                           Tooltip(
                             message: _engineMode == EngineMode.builtIn
                                 ? (_builtInAvailable
-                                    ? l10n.builtInReady
-                                    : l10n.builtInNotReady)
+                                      ? l10n.builtInReady
+                                      : l10n.builtInNotReady)
                                 : (_customDylibPath != null
-                                    ? _customDylibPath!.split('/').last
-                                    : l10n.customNotSet),
+                                      ? _customDylibPath!.split('/').last
+                                      : l10n.customNotSet),
                             child: Icon(
                               _engineMode == EngineMode.builtIn
                                   ? Icons.inventory_2
@@ -999,21 +1052,18 @@ class _HomePageState extends State<HomePage> {
               crossAxisSpacing: 12,
               childAspectRatio: 3 / 4,
             ),
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final game = games[index];
-                return _CoverCard(
-                  game: game,
-                  l10n: l10n,
-                  onTap: () => _openGameDetail(game),
-                  onRename: () => _renameGame(game),
-                  onRemove: () => _removeGame(game),
-                  onSetCover: () => _setCoverImage(game),
-                  onPackUnpack: () => _packUnpackGame(game),
-                );
-              },
-              childCount: games.length,
-            ),
+            delegate: SliverChildBuilderDelegate((context, index) {
+              final game = games[index];
+              return _CoverCard(
+                game: game,
+                l10n: l10n,
+                onTap: () => _openGameDetail(game),
+                onRename: () => _renameGame(game),
+                onRemove: () => _removeGame(game),
+                onSetCover: () => _setCoverImage(game),
+                onPackUnpack: () => _packUnpackGame(game),
+              );
+            }, childCount: games.length),
           ),
         );
       },
@@ -1057,8 +1107,14 @@ class _CoverCard extends StatelessWidget {
         offset.dy + box.size.height,
       ),
       items: [
-        PopupMenuItem(value: 'cover', child: _menuTile(Icons.image, l10n.setCover)),
-        PopupMenuItem(value: 'rename', child: _menuTile(Icons.edit, l10n.rename)),
+        PopupMenuItem(
+          value: 'cover',
+          child: _menuTile(Icons.image, l10n.setCover),
+        ),
+        PopupMenuItem(
+          value: 'rename',
+          child: _menuTile(Icons.edit, l10n.rename),
+        ),
         PopupMenuItem(
           value: 'pack_unpack',
           child: _menuTile(
@@ -1103,9 +1159,7 @@ class _CoverCard extends StatelessWidget {
     return Card(
       clipBehavior: Clip.antiAlias,
       elevation: 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -1170,10 +1224,7 @@ class _CoverCard extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Colors.transparent,
-              Colors.black54,
-            ],
+            colors: [Colors.transparent, Colors.black54],
           ),
         ),
       ),
@@ -1208,7 +1259,8 @@ class _CoverCard extends StatelessWidget {
             Text(
               [
                 if (lastPlayed != null) _formatDate(lastPlayed),
-                if (hasDuration) l10n.playDuration(GameInfo.formatPlayDuration(totalSeconds)),
+                if (hasDuration)
+                  l10n.playDuration(GameInfo.formatPlayDuration(totalSeconds)),
               ].join(' · '),
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.6),
@@ -1268,7 +1320,10 @@ class _Xp3PickerDialogState extends State<_Xp3PickerDialog> {
             return RadioListTile<int>(
               value: i,
               groupValue: _selectedIndex,
-              title: Text(name, style: const TextStyle(fontFamily: 'monospace')),
+              title: Text(
+                name,
+                style: const TextStyle(fontFamily: 'monospace'),
+              ),
               onChanged: (value) {
                 setState(() {
                   _selectedIndex = value;
@@ -1287,10 +1342,7 @@ class _Xp3PickerDialogState extends State<_Xp3PickerDialog> {
           onPressed: _selectedIndex == null
               ? null
               : () {
-                  Navigator.pop(
-                    context,
-                    widget.xp3Files[_selectedIndex!],
-                  );
+                  Navigator.pop(context, widget.xp3Files[_selectedIndex!]);
                 },
           child: Text(l10n.addGame),
         ),

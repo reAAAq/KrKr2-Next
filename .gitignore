@@ -10,10 +10,16 @@ vcpkg_installed/
 .idea/
 .vscode/
 .vs/
+.cache/
 .gradle/
 .act/
 .devtools
 *.md
+!README*.md
+!CONTRIBUTING.md
+!doc/*.md
+!docs/*.md
+!tools/*.md
 *.lock
 /stats_server
 local.properties
@@ -27,3 +33,7 @@ cpp/plugins/cubism/Core/lib/
 cpp/plugins/cubism/Framework/
 bridge/flutter_engine_bridge/ios/Libs/*.a
 apps/flutter_app/devtools_options.yaml
+
+
+# example file for test
+example/

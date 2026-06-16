@@ -46,6 +46,11 @@ find_package(SDL2 CONFIG REQUIRED)
 find_package(zstd CONFIG REQUIRED)
 find_package(unofficial-minizip CONFIG REQUIRED)
 
+find_library(B2_LIBRARY NAMES b2 PATHS /opt/homebrew/lib NO_DEFAULT_PATH)
+if(NOT B2_LIBRARY)
+    find_library(B2_LIBRARY NAMES b2)
+endif()
+
 target_link_libraries(${PROJECT_NAME} PRIVATE
     uchardet::libuchardet
     unrar::unrar
@@ -56,4 +61,5 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
     $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
     unofficial::minizip::minizip
+    $<$<BOOL:${B2_LIBRARY}>:${B2_LIBRARY}>
 )
